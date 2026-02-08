@@ -1,6 +1,6 @@
 {
   "name": "@smartergpt/lex-mcp",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "description": "MCP server for Lex episodic memory - stdio transport wrapper",
   "mcpName": "dev.smartergpt/lex",
   "type": "module",
@@ -10,7 +10,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@smartergpt/lex": "^2.1.2"
+    "@smartergpt/lex": "^2.2.0"
   },
   "publishConfig": {
     "access": "public",

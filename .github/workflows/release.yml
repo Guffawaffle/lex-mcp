@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., 2.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  validate-tag:
+    name: Validate Release Tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate semver tag
+        if: github.event_name == 'push'
+        run: |
+          if [[ ! "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid semver tag: ${{ github.ref_name }}"
+            exit 1
+          fi
+          echo "✅ Valid semver tag: ${{ github.ref_name }}"
+
+  verify-package:
+    name: Verify Package
+    needs: validate-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Verify entry point loads
+        run: |
+          node -e "
+            import('@smartergpt/lex/mcp-server')
+              .then(() => console.log('✅ MCP server module loads'))
+              .catch(e => { console.error('❌ Failed:', e.message); process.exit(1); });
+          "
+
+      - name: Verify package contents
+        run: |
+          echo "=== Package files ==="
+          npm pack --dry-run
+          echo ""
+          echo "=== Version check ==="
+          node -e "
+            import { readFileSync } from 'fs';
+            const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+            console.log('Package: ' + pkg.name + '@' + pkg.version);
+            console.log('Lex dep:  ' + pkg.dependencies['@smartergpt/lex']);
+          "
+          echo "✅ Package looks good"
+
+      - name: Create tarball
+        run: npm pack
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: smartergpt-lex-mcp-*.tgz
+          retention-days: 7
+          if-no-files-found: error
+
+  # NOTE: npm publish is done manually (2FA requires interactive auth).
+  # Run: cd lex-mcp && npm publish --access public
+  # Uncomment when granular access token with publish scope is configured.
+
+  create-github-release:
+    name: Create GitHub Release
+    needs: verify-package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            echo "Generating changelog from $PREV_TAG to ${{ github.ref_name }}"
+            git log $PREV_TAG..${{ github.ref_name }} --pretty=format:"- %s (%h)" > CHANGELOG.txt
+          else
+            echo "First release - listing all commits"
+            git log --pretty=format:"- %s (%h)" > CHANGELOG.txt
+          fi
+
+      - name: Download tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body_path: CHANGELOG.txt
+          files: smartergpt-lex-mcp-*.tgz
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

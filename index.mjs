@@ -15,7 +15,8 @@
  */
 
 import { MCPServer } from "@smartergpt/lex/mcp-server";
-import { join } from "path";
+import { join, dirname } from "path";
+import { mkdirSync } from "fs";
 
 // Workspace root defaults to current working directory
 const repoRoot = process.env.LEX_WORKSPACE_ROOT || process.cwd();
@@ -29,6 +30,13 @@ if (!process.env.LEX_WORKSPACE_ROOT) {
 const dbPath =
   process.env.LEX_MEMORY_DB || join(repoRoot, ".smartergpt", "lex", "lex.db");
 
+// Ensure the database directory exists (first-time setup)
+try {
+  mkdirSync(dirname(dbPath), { recursive: true });
+} catch {
+  // Ignore — directory may already exist or be read-only
+}
+
 // Initialize MCP server
 let mcpServer;
 try {
@@ -40,6 +48,10 @@ try {
 } catch (error) {
   console.error(`[LEX-MCP] Failed to initialize: ${error.message}`);
   process.exit(1);
+}
+
+if (process.env.LEX_DEBUG) {
+  console.error(`[LEX-MCP] Ready (stdio mode)`);
 }
 
 // MCP stdio protocol handler (JSON-RPC 2.0 over newline-delimited JSON)
@@ -57,6 +69,15 @@ process.stdin.on("data", async (chunk) => {
     let request;
     try {
       request = JSON.parse(line);
+
+      // MCP notifications have no `id` — silently ignore them per spec
+      if (request.id === undefined || request.id === null) {
+        if (process.env.LEX_DEBUG) {
+          console.error(`[LEX-MCP] Notification: ${request.method}`);
+        }
+        continue;
+      }
+
       const response = await mcpServer.handleRequest(request);
 
       // MCP protocol response format
@@ -66,7 +87,7 @@ process.stdin.on("data", async (chunk) => {
             jsonrpc: "2.0",
             id: request.id,
             error: response.error,
-          })
+          }),
         );
       } else {
         console.log(
@@ -74,7 +95,7 @@ process.stdin.on("data", async (chunk) => {
             jsonrpc: "2.0",
             id: request.id,
             result: response,
-          })
+          }),
         );
       }
     } catch (error) {
@@ -86,7 +107,7 @@ process.stdin.on("data", async (chunk) => {
             message: error.message,
             code: error.code || "PARSE_ERROR",
           },
-        })
+        }),
       );
     }
   }

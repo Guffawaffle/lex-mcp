@@ -53,7 +53,7 @@ Add to `claude_desktop_config.json`:
 
 ## Tools
 
-This MCP server provides 11 tools for episodic memory management:
+This MCP server provides 14 tools for episodic memory management:
 
 - `frame_create` - Store episodic memory snapshot
 - `frame_search` - Search frames by reference, branch, or ticket
@@ -66,6 +66,9 @@ This MCP server provides 11 tools for episodic memory management:
 - `system_introspect` - Discover Lex capabilities and state
 - `help` - Usage help and examples
 - `hints_get` - Retrieve error recovery hints
+- `contradictions_scan` - Detect conflicting information across frames
+- `db_stats` - Database statistics and activity metrics
+- `turncost_calculate` - Turn Cost governance metrics
 
 ## Learn More
 

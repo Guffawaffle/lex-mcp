@@ -1,6 +1,8 @@
 # @smartergpt/lex-mcp
 
-MCP server wrapper for [Lex](https://github.com/Guffawaffle/lex) episodic memory.
+Thin MCP stdio wrapper for [@smartergpt/lex](https://github.com/Guffawaffle/lex) episodic memory.
+
+Lex owns all capabilities. This package owns delivery over [Model Context Protocol](https://modelcontextprotocol.io/).
 
 ## Quick Start
 
@@ -43,13 +45,22 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
+### Quick Smoke Test
+
+```bash
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | npx @smartergpt/lex-mcp
+```
+
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LEX_WORKSPACE_ROOT` | Workspace root directory | Current directory |
-| `LEX_MEMORY_DB` | SQLite database path | `.smartergpt/lex/lex.db` |
-| `LEX_DEBUG` | Enable debug logging | Off |
+| `LEX_DB_PATH` | SQLite database path (canonical) | `.smartergpt/lex/memory.db` |
+| `LEX_MEMORY_DB` | Alias for `LEX_DB_PATH` (compat only) | — |
+| `LEX_DEBUG` | Enable debug logging to stderr | Off |
+
+When both `LEX_DB_PATH` and `LEX_MEMORY_DB` are set, `LEX_DB_PATH` wins.
 
 ## Tools
 

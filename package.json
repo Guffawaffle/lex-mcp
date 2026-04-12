@@ -1,6 +1,6 @@
 {
   "name": "@smartergpt/lex-mcp",
-  "version": "2.5.2",
+  "version": "2.7.0",
   "description": "MCP server for Lex episodic memory - stdio transport wrapper",
   "mcpName": "dev.smartergpt/lex",
   "type": "module",
@@ -10,13 +10,19 @@
     "README.md"
   ],
   "scripts": {
+    "test": "node test-contract.mjs && node test-mcp-server.mjs --local --clean",
+    "test:contract": "node test-contract.mjs",
+    "test:contract:verbose": "node test-contract.mjs --verbose",
     "test:mcp": "node test-mcp-server.mjs --local --clean",
     "test:mcp:verbose": "node test-mcp-server.mjs --local --clean --verbose",
+    "test:pack": "node test-pack-smoke.mjs",
+    "test:pack:verbose": "node test-pack-smoke.mjs --verbose",
+    "test:pack:keep": "node test-pack-smoke.mjs --keep",
     "test:published": "node test-mcp-server.mjs --clean",
     "link:local": "rm -rf node_modules/@smartergpt/lex && mkdir -p node_modules/@smartergpt && ln -s /srv/lex-mcp/lex node_modules/@smartergpt/lex"
   },
   "dependencies": {
-    "@smartergpt/lex": "^2.5.1"
+    "@smartergpt/lex": "^2.7.0"
   },
   "publishConfig": {
     "access": "public",

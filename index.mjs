@@ -10,7 +10,8 @@
  *
  * Environment Variables:
  *   LEX_WORKSPACE_ROOT - Workspace root directory (default: cwd)
- *   LEX_MEMORY_DB      - SQLite database path (default: .smartergpt/lex/lex.db)
+ *   LEX_DB_PATH        - SQLite database path (default: .smartergpt/lex/memory.db)
+ *   LEX_MEMORY_DB      - Alias for LEX_DB_PATH (for backwards compatibility)
  *   LEX_DEBUG          - Enable debug logging to stderr
  */
 
@@ -26,9 +27,12 @@ if (!process.env.LEX_WORKSPACE_ROOT) {
   process.env.LEX_WORKSPACE_ROOT = repoRoot;
 }
 
-// Database path defaults to .smartergpt/lex/lex.db in workspace root
+// Database path: LEX_DB_PATH (canonical) > LEX_MEMORY_DB (compat alias) > default
+// Default matches Lex core: .smartergpt/lex/memory.db
 const dbPath =
-  process.env.LEX_MEMORY_DB || join(repoRoot, ".smartergpt", "lex", "lex.db");
+  process.env.LEX_DB_PATH ||
+  process.env.LEX_MEMORY_DB ||
+  join(repoRoot, ".smartergpt", "lex", "memory.db");
 
 // Ensure the database directory exists (first-time setup)
 try {

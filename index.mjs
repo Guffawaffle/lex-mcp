@@ -9,45 +9,30 @@
  *   npx @smartergpt/lex-mcp
  *
  * Environment Variables:
- *   LEX_WORKSPACE_ROOT - Workspace root directory (default: cwd)
+ *   LEX_WORKSPACE_ROOT - Project root directory (compat env var name, default: cwd)
  *   LEX_DB_PATH        - SQLite database path (default: .smartergpt/lex/memory.db)
  *   LEX_MEMORY_DB      - Alias for LEX_DB_PATH (for backwards compatibility)
  *   LEX_DEBUG          - Enable debug logging to stderr
  */
 
 import { MCPServer } from "@smartergpt/lex/mcp-server";
-import { join, dirname } from "path";
-import { mkdirSync } from "fs";
 
-// Workspace root defaults to current working directory
-const repoRoot = process.env.LEX_WORKSPACE_ROOT || process.cwd();
+// Project root defaults to current working directory.
+const projectRoot = process.env.LEX_WORKSPACE_ROOT || process.cwd();
 
 // Set LEX_WORKSPACE_ROOT for modules that need it
 if (!process.env.LEX_WORKSPACE_ROOT) {
-  process.env.LEX_WORKSPACE_ROOT = repoRoot;
-}
-
-// Database path: LEX_DB_PATH (canonical) > LEX_MEMORY_DB (compat alias) > default
-// Default matches Lex core: .smartergpt/lex/memory.db
-const dbPath =
-  process.env.LEX_DB_PATH ||
-  process.env.LEX_MEMORY_DB ||
-  join(repoRoot, ".smartergpt", "lex", "memory.db");
-
-// Ensure the database directory exists (first-time setup)
-try {
-  mkdirSync(dirname(dbPath), { recursive: true });
-} catch {
-  // Ignore — directory may already exist or be read-only
+  process.env.LEX_WORKSPACE_ROOT = projectRoot;
 }
 
 // Initialize MCP server
 let mcpServer;
 try {
-  mcpServer = new MCPServer(dbPath, repoRoot);
+  // Lex core owns env, .lex.config.json, and default-path precedence. Passing
+  // only the caller root prevents the delivery wrapper from masking config.
+  mcpServer = new MCPServer({ repoRoot: projectRoot });
   if (process.env.LEX_DEBUG) {
-    console.error(`[LEX-MCP] Server initialized: ${dbPath}`);
-    console.error(`[LEX-MCP] Workspace root: ${repoRoot}`);
+    console.error(`[LEX-MCP] Project root: ${projectRoot}`);
   }
 } catch (error) {
   console.error(`[LEX-MCP] Failed to initialize: ${error.message}`);

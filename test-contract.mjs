@@ -16,7 +16,7 @@
  */
 
 import { spawn } from "child_process";
-import { mkdtempSync, existsSync, readdirSync, rmSync } from "fs";
+import { mkdtempSync, existsSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -213,7 +213,36 @@ async function testDbPathPrecedence() {
   }
 }
 
-// ── Test 5: serverInfo ──────────────────────────────────────────────────────
+// ── Test 5: caller-local .lex.config.json ──────────────────────────────────
+
+async function testCallerConfigFile() {
+  console.log("\n📋 Test: Caller-local .lex.config.json controls the MCP store");
+
+  const workDir = mkdtempSync(join(tmpdir(), "lex-contract-config-"));
+  const configuredDb = join(workDir, "configured", "shared.db");
+  try {
+    writeFileSync(
+      join(workDir, ".lex.config.json"),
+      JSON.stringify({ paths: { appRoot: ".", database: "./configured/shared.db" } })
+    );
+    await sendRequest(
+      { LEX_WORKSPACE_ROOT: workDir, _workDir: workDir },
+      [
+        { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1.0" } } },
+        { jsonrpc: "2.0", method: "notifications/initialized" },
+        { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "frame_create", arguments: { reference_point: "config test", summary_caption: "caller config store", status_snapshot: { next_action: "verify" }, module_scope: ["test"] } } },
+      ]
+    );
+
+    assert(existsSync(configuredDb), "DB created at .lex.config.json path", `${configuredDb} does not exist`);
+    const defaultDb = join(workDir, ".smartergpt", "lex", "memory.db");
+    assert(!existsSync(defaultDb), "Default DB NOT created when file config is present", `${defaultDb} unexpectedly exists`);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// ── Test 6: serverInfo ──────────────────────────────────────────────────────
 
 async function testServerInfo() {
   console.log("\n📋 Test: serverInfo returns correct name and non-stale version");
@@ -239,7 +268,7 @@ async function testServerInfo() {
   }
 }
 
-// ── Test 6: tool list ───────────────────────────────────────────────────────
+// ── Test 7: tool list ───────────────────────────────────────────────────────
 
 async function testToolList() {
   console.log("\n📋 Test: tools/list returns exactly 14 canonical tools");
@@ -294,7 +323,7 @@ async function testToolList() {
   }
 }
 
-// ── Test 7: system_introspect version matches serverInfo ────────────────────
+// ── Test 8: system_introspect version matches serverInfo ────────────────────
 
 async function testIntrospectVersion() {
   console.log("\n📋 Test: system_introspect version matches serverInfo (not cwd-dependent)");
@@ -337,7 +366,7 @@ async function testIntrospectVersion() {
   }
 }
 
-// ── Test 8: startup with no env vars ────────────────────────────────────────
+// ── Test 9: startup with no env vars ────────────────────────────────────────
 
 async function testBareStartup() {
   console.log("\n📋 Test: Server starts with zero env vars (uses cwd as workspace)");
@@ -374,6 +403,7 @@ async function main() {
   await testLexDbPathOverride();
   await testLexMemoryDbCompat();
   await testDbPathPrecedence();
+  await testCallerConfigFile();
   await testServerInfo();
   await testToolList();
   await testIntrospectVersion();

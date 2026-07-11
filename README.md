@@ -55,12 +55,14 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | npx @smarter
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `LEX_WORKSPACE_ROOT` | Workspace root directory | Current directory |
+| `LEX_WORKSPACE_ROOT` | Project root directory (compat env var name) | Current directory |
 | `LEX_DB_PATH` | SQLite database path (canonical) | `.smartergpt/lex/memory.db` |
 | `LEX_MEMORY_DB` | Alias for `LEX_DB_PATH` (compat only) | — |
 | `LEX_DEBUG` | Enable debug logging to stderr | Off |
 
 When both `LEX_DB_PATH` and `LEX_MEMORY_DB` are set, `LEX_DB_PATH` wins.
+
+For multi-root workspaces, set the same absolute `LEX_DB_PATH` for direct Lex, this MCP wrapper, and AXF-routed Lex. The wrapper delegates `.lex.config.json`, environment, and default-store resolution to Lex core, so installed launches now honor caller-project config files. Use `system_introspect` to compare canonical store paths and `path-v1` identities across launch paths.
 
 ## Tools
 

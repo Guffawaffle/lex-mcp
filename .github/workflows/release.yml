@@ -24,6 +24,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify signed release tag
+        if: github.event_name == 'push'
+        env:
+          TRUSTED_GPG_KEYS: ${{ secrets.TRUSTED_GPG_KEYS }}
+        run: |
+          if [ -z "$TRUSTED_GPG_KEYS" ]; then
+            echo "❌ TRUSTED_GPG_KEYS is required to verify release tags"
+            exit 1
+          fi
+          echo "$TRUSTED_GPG_KEYS" | base64 -d | gpg --import
+          if ! git rev-parse --verify "${{ github.ref_name }}^{tag}" >/dev/null 2>&1; then
+            echo "❌ ${{ github.ref_name }} must be an annotated tag"
+            exit 1
+          fi
+          git verify-tag "${{ github.ref_name }}"
+          echo "✅ Tag signature verified"
+
       - name: Validate semver tag
         if: github.event_name == 'push'
         run: |
@@ -45,8 +62,26 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Check out the matching Lex release
+        uses: actions/checkout@v6
+        with:
+          repository: Guffawaffle/lex
+          ref: ${{ github.ref_name }}
+          path: lex-core
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci --ignore-scripts
+
+      - name: Build native dependencies
+        run: npm rebuild better-sqlite3-multiple-ciphers
+
+      - name: Run delivery-contract tests
+        run: npm test
+
+      - name: Run packed-artifact smoke test
+        run: npm run test:pack
+        env:
+          LEX_MCP_LEX_ROOT: ${{ github.workspace }}/lex-core
 
       - name: Verify entry point loads
         run: |

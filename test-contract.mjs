@@ -16,12 +16,15 @@
  */
 
 import { spawn } from "child_process";
-import { mkdtempSync, existsSync, readdirSync, rmSync, writeFileSync } from "fs";
+import { mkdtempSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
 const verbose = process.argv.includes("--verbose");
 const INDEX_PATH = join(import.meta.dirname, "index.mjs");
+const PACKAGE_PATH = join(import.meta.dirname, "package.json");
+const CORE_PACKAGE_PATH = join(import.meta.dirname, "node_modules", "@smartergpt", "lex", "package.json");
+const EXPECTED_MCP_NAME = "dev.smartergpt/lex";
 
 let passed = 0;
 let failed = 0;
@@ -34,6 +37,27 @@ function assert(condition, label, detail) {
     console.log(`  ❌ ${label}: ${detail}`);
     failed++;
   }
+}
+
+function readPackage(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+// ── Test 0: published-package metadata ────────────────────────────────────
+
+function testPackageMetadata() {
+  console.log("\n📋 Test: wrapper package metadata is a coordinated release contract");
+
+  const wrapper = readPackage(PACKAGE_PATH);
+  const core = readPackage(CORE_PACKAGE_PATH);
+  const coreRequirement = wrapper.dependencies?.["@smartergpt/lex"];
+
+  assert(wrapper.name === "@smartergpt/lex-mcp", "wrapper package name is canonical", `Got: ${wrapper.name}`);
+  assert(wrapper.mcpName === EXPECTED_MCP_NAME, "wrapper mcpName matches the registry namespace", `Got: ${wrapper.mcpName}`);
+  assert(/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(wrapper.version), "wrapper version is an exact semver", `Got: ${wrapper.version}`);
+  assert(coreRequirement === wrapper.version, "core dependency is pinned exactly to the wrapper release", `dependency: ${coreRequirement}, wrapper: ${wrapper.version}`);
+  assert(wrapper.engines?.node === core.engines?.node, "wrapper Node engine matches Lex core", `wrapper: ${wrapper.engines?.node}, core: ${core.engines?.node}`);
+  assert(core.version === wrapper.version, "installed Lex core matches the wrapper release", `core: ${core.version}, wrapper: ${wrapper.version}`);
 }
 
 /**
@@ -245,7 +269,7 @@ async function testCallerConfigFile() {
 // ── Test 6: serverInfo ──────────────────────────────────────────────────────
 
 async function testServerInfo() {
-  console.log("\n📋 Test: serverInfo returns correct name and non-stale version");
+  console.log("\n📋 Test: serverInfo returns the coordinated release version");
 
   const workDir = mkdtempSync(join(tmpdir(), "lex-contract-info-"));
   try {
@@ -261,8 +285,8 @@ async function testServerInfo() {
 
     const info = init?.result?.serverInfo;
     assert(info?.name === "lex-mcp", `serverInfo.name is "lex-mcp"`, `Got: ${info?.name}`);
-    assert(info?.version !== "0.1.0", "serverInfo.version is not stale 0.1.0", `Got: ${info?.version}`);
-    assert(/^\d+\.\d+\.\d+/.test(info?.version || ""), "serverInfo.version is semver", `Got: ${info?.version}`);
+    const wrapper = readPackage(PACKAGE_PATH);
+    assert(info?.version === wrapper.version, "serverInfo.version matches the wrapper package", `server: ${info?.version}, wrapper: ${wrapper.version}`);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -399,6 +423,7 @@ async function testBareStartup() {
 async function main() {
   console.log("🔒 lex-mcp Delivery Contract Tests\n");
 
+  testPackageMetadata();
   await testDefaultDbPath();
   await testLexDbPathOverride();
   await testLexMemoryDbCompat();

@@ -23,7 +23,7 @@ import { tmpdir } from "os";
 const verbose = process.argv.includes("--verbose");
 const keep = process.argv.includes("--keep");
 
-const LEX_ROOT = join(import.meta.dirname, "..", "lex");
+const LEX_ROOT = process.env.LEX_MCP_LEX_ROOT || join(import.meta.dirname, "..", "lex");
 const LEX_MCP_ROOT = import.meta.dirname;
 
 let passed = 0;
@@ -170,13 +170,20 @@ async function main() {
     const mcpBin = join(installDir, "node_modules", ".bin", "lex-mcp");
     const mcpIndex = join(installDir, "node_modules", "@smartergpt", "lex-mcp", "index.mjs");
     const lexPkg = join(installDir, "node_modules", "@smartergpt", "lex", "package.json");
+    const lexMcpPkg = join(installDir, "node_modules", "@smartergpt", "lex-mcp", "package.json");
 
     assert(existsSync(mcpIndex), "lex-mcp index.mjs installed", `${mcpIndex} not found`);
     assert(existsSync(lexPkg), "@smartergpt/lex installed as dependency", `${lexPkg} not found`);
+    assert(existsSync(lexMcpPkg), "@smartergpt/lex-mcp package metadata installed", `${lexMcpPkg} not found`);
 
-    // Verify lex exports are resolvable
+    // Verify the installed artifacts retain the coordinated release contract.
     const lexPkgJson = JSON.parse(readFileSync(lexPkg, "utf-8"));
+    const lexMcpPkgJson = JSON.parse(readFileSync(lexMcpPkg, "utf-8"));
     assert(lexPkgJson.exports?.["./mcp-server"] != null, "lex exports ./mcp-server subpath", `exports: ${JSON.stringify(Object.keys(lexPkgJson.exports || {}))}`);
+    assert(lexMcpPkgJson.mcpName === "dev.smartergpt/lex", "packed wrapper mcpName matches the registry namespace", `Got: ${lexMcpPkgJson.mcpName}`);
+    assert(lexMcpPkgJson.dependencies?.["@smartergpt/lex"] === lexMcpPkgJson.version, "packed wrapper pins the matching Lex release", `dependency: ${lexMcpPkgJson.dependencies?.["@smartergpt/lex"]}, wrapper: ${lexMcpPkgJson.version}`);
+    assert(lexPkgJson.version === lexMcpPkgJson.version, "packed Lex core matches wrapper version", `core: ${lexPkgJson.version}, wrapper: ${lexMcpPkgJson.version}`);
+    assert(lexPkgJson.engines?.node === lexMcpPkgJson.engines?.node, "packed wrapper Node engine matches Lex core", `wrapper: ${lexMcpPkgJson.engines?.node}, core: ${lexPkgJson.engines?.node}`);
   } catch (err) {
     console.error(`\n💥 Install failed: ${err.message}`);
     if (err.stderr) console.error(err.stderr.toString());
@@ -216,7 +223,8 @@ async function main() {
     const init = responses.find((r) => r.id === 1);
     assert(init != null, "Got initialize response", "No response");
     assert(init?.result?.serverInfo?.name === "lex-mcp", "serverInfo.name is lex-mcp", `Got: ${init?.result?.serverInfo?.name}`);
-    assert(/^\d+\.\d+\.\d+/.test(init?.result?.serverInfo?.version || ""), "serverInfo.version is semver", `Got: ${init?.result?.serverInfo?.version}`);
+    const installedWrapper = JSON.parse(readFileSync(join(installDir, "node_modules", "@smartergpt", "lex-mcp", "package.json"), "utf-8"));
+    assert(init?.result?.serverInfo?.version === installedWrapper.version, "serverInfo.version matches packed wrapper", `server: ${init?.result?.serverInfo?.version}, wrapper: ${installedWrapper.version}`);
 
     // Verify tools/list
     const tools = responses.find((r) => r.id === 2);

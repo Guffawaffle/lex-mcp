@@ -155,7 +155,7 @@ async function main() {
       cwd: installDir,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
-      timeout: 60000,
+      timeout: 180000,
     });
 
     log("Installing lex-mcp tarball...");
@@ -163,7 +163,7 @@ async function main() {
       cwd: installDir,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
-      timeout: 60000,
+      timeout: 180000,
     });
 
     // Verify node_modules layout

@@ -61,16 +61,20 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | npx @smarter
 
 ## Environment Variables
 
-| Variable             | Description                                  | Default                     |
-| -------------------- | -------------------------------------------- | --------------------------- |
-| `LEX_WORKSPACE_ROOT` | Project root directory (compat env var name) | Current directory           |
-| `LEX_DB_PATH`        | SQLite database path (canonical)             | `.smartergpt/lex/memory.db` |
-| `LEX_MEMORY_DB`      | Alias for `LEX_DB_PATH` (compat only)        | —                           |
-| `LEX_DEBUG`          | Enable debug logging to stderr               | Off                         |
+| Variable                | Description                                      | Default                     |
+| ----------------------- | ------------------------------------------------ | --------------------------- |
+| `LEX_WORKSPACE_ROOT`    | Project root directory (compat env var name)     | Current directory           |
+| `LEX_STORE`             | Frame backend (`sqlite` or `postgres`)           | `sqlite`                    |
+| `LEX_DATABASE_URL`      | PostgreSQL URL; required for PostgreSQL           | —                           |
+| `LEX_POSTGRES_PASSWORD` | Optional password for a credential-free URL       | —                           |
+| `LEX_POSTGRES_POOL_MAX` | Maximum PostgreSQL connection-pool size           | `10`                        |
+| `LEX_DB_PATH`           | SQLite database path; ignored by PostgreSQL       | `.smartergpt/lex/memory.db` |
+| `LEX_MEMORY_DB`         | Alias for `LEX_DB_PATH` (compat only)             | —                           |
+| `LEX_DEBUG`             | Enable debug logging to stderr                    | Off                         |
 
 When both `LEX_DB_PATH` and `LEX_MEMORY_DB` are set, `LEX_DB_PATH` wins.
 
-For multi-root workspaces, set the same absolute `LEX_DB_PATH` for direct Lex, this MCP wrapper, and AXF-routed Lex. The wrapper delegates `.lex.config.json`, environment, and default-store resolution to Lex core, so installed launches now honor caller-project config files. Use `system_introspect` to compare canonical store paths and `path-v1` identities across launch paths.
+For multi-root workspaces using SQLite, set the same absolute `LEX_DB_PATH` for direct Lex, this MCP wrapper, and AXF-routed Lex. For shared cross-host storage, set `LEX_STORE=postgres` and the same `LEX_DATABASE_URL` on every surface; keep credentials in the host environment or secret configuration. The wrapper delegates `.lex.config.json`, environment, and store resolution to Lex core, so installed launches honor caller-project config files. Use `system_introspect` to compare `path-v1` SQLite or credential-free `postgres-v1` identities across launch paths.
 
 ## Tools
 

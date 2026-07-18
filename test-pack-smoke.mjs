@@ -3,7 +3,7 @@
  * lex-mcp Pack Smoke Test
  *
  * Verifies the published artifact works in a clean install:
- *   1. Pack @smartergpt/lex (local)
+ *   1. Pack @smartergpt/lex locally, or consume LEX_MCP_LEX_TARBALL
  *   2. Pack @smartergpt/lex-mcp (local)
  *   3. Install both tarballs in a clean temp directory
  *   4. Spawn the installed entry point
@@ -17,13 +17,14 @@
 
 import { execSync, spawn } from "child_process";
 import { mkdtempSync, existsSync, readdirSync, rmSync, readFileSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 import { tmpdir } from "os";
 
 const verbose = process.argv.includes("--verbose");
 const keep = process.argv.includes("--keep");
 
 const LEX_ROOT = process.env.LEX_MCP_LEX_ROOT || join(import.meta.dirname, "..", "lex");
+const STAGED_LEX_TARBALL = process.env.LEX_MCP_LEX_TARBALL;
 const LEX_MCP_ROOT = import.meta.dirname;
 
 let passed = 0;
@@ -105,23 +106,29 @@ async function main() {
 
   // ── Step 1: Pack both packages ──────────────────────────────────────────
 
-  console.log("📋 Step 1: Packing @smartergpt/lex and @smartergpt/lex-mcp");
+  console.log("📋 Step 1: Staging @smartergpt/lex and packing @smartergpt/lex-mcp");
 
   const packDir = mkdtempSync(join(tmpdir(), "lex-pack-smoke-"));
   log(`Temp dir: ${packDir}`);
 
   let lexTarball, lexMcpTarball;
   try {
-    // Pack lex
-    log("Packing @smartergpt/lex...");
-    const lexPackOut = execSync("npm pack --pack-destination " + JSON.stringify(packDir), {
-      cwd: LEX_ROOT,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    lexTarball = join(packDir, lexPackOut.split("\n").pop().trim());
-    assert(existsSync(lexTarball), "lex tarball created", `Expected: ${lexTarball}`);
-    log(`lex tarball: ${lexTarball}`);
+    if (STAGED_LEX_TARBALL) {
+      lexTarball = resolve(STAGED_LEX_TARBALL);
+      assert(existsSync(lexTarball), "staged lex tarball exists", `Expected: ${lexTarball}`);
+      log(`staged lex tarball: ${lexTarball}`);
+    } else {
+      // Pack lex
+      log("Packing @smartergpt/lex...");
+      const lexPackOut = execSync("npm pack --pack-destination " + JSON.stringify(packDir), {
+        cwd: LEX_ROOT,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      }).trim();
+      lexTarball = join(packDir, lexPackOut.split("\n").pop().trim());
+      assert(existsSync(lexTarball), "lex tarball created", `Expected: ${lexTarball}`);
+      log(`lex tarball: ${lexTarball}`);
+    }
 
     // Pack lex-mcp
     log("Packing @smartergpt/lex-mcp...");
@@ -169,10 +176,14 @@ async function main() {
     // Verify node_modules layout
     const mcpBin = join(installDir, "node_modules", ".bin", "lex-mcp");
     const mcpIndex = join(installDir, "node_modules", "@smartergpt", "lex-mcp", "index.mjs");
+    const mcpStdio = join(installDir, "node_modules", "@smartergpt", "lex-mcp", "stdio.mjs");
+    const mcpStdioTypes = join(installDir, "node_modules", "@smartergpt", "lex-mcp", "stdio.d.ts");
     const lexPkg = join(installDir, "node_modules", "@smartergpt", "lex", "package.json");
     const lexMcpPkg = join(installDir, "node_modules", "@smartergpt", "lex-mcp", "package.json");
 
     assert(existsSync(mcpIndex), "lex-mcp index.mjs installed", `${mcpIndex} not found`);
+    assert(existsSync(mcpStdio), "lex-mcp public stdio host installed", `${mcpStdio} not found`);
+    assert(existsSync(mcpStdioTypes), "lex-mcp stdio declarations installed", `${mcpStdioTypes} not found`);
     assert(existsSync(lexPkg), "@smartergpt/lex installed as dependency", `${lexPkg} not found`);
     assert(existsSync(lexMcpPkg), "@smartergpt/lex-mcp package metadata installed", `${lexMcpPkg} not found`);
 
@@ -182,6 +193,8 @@ async function main() {
     assert(lexPkgJson.exports?.["./mcp-server"] != null, "lex exports ./mcp-server subpath", `exports: ${JSON.stringify(Object.keys(lexPkgJson.exports || {}))}`);
     assert(lexMcpPkgJson.mcpName === "dev.smartergpt/lex", "packed wrapper mcpName matches the registry namespace", `Got: ${lexMcpPkgJson.mcpName}`);
     assert(lexMcpPkgJson.dependencies?.["@smartergpt/lex"] === lexMcpPkgJson.version, "packed wrapper pins the matching Lex release", `dependency: ${lexMcpPkgJson.dependencies?.["@smartergpt/lex"]}, wrapper: ${lexMcpPkgJson.version}`);
+    assert(lexMcpPkgJson.exports?.["."]?.import === "./stdio.mjs", "packed wrapper exports the stdio host", `exports: ${JSON.stringify(lexMcpPkgJson.exports)}`);
+    assert(lexMcpPkgJson.exports?.["."]?.types === "./stdio.d.ts", "packed wrapper exports stdio declarations", `exports: ${JSON.stringify(lexMcpPkgJson.exports)}`);
     assert(lexPkgJson.version === lexMcpPkgJson.version, "packed Lex core matches wrapper version", `core: ${lexPkgJson.version}, wrapper: ${lexMcpPkgJson.version}`);
     assert(lexPkgJson.engines?.node === lexMcpPkgJson.engines?.node, "packed wrapper Node engine matches Lex core", `wrapper: ${lexMcpPkgJson.engines?.node}, core: ${lexPkgJson.engines?.node}`);
   } catch (err) {
@@ -216,7 +229,7 @@ async function main() {
       { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "pack-test", version: "1.0" } } },
       { jsonrpc: "2.0", method: "notifications/initialized" },
       { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
-      { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "system_introspect", arguments: {} } },
+      { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "system_introspect", arguments: { format: "compact" } } },
     ]);
 
     // Verify initialize
@@ -234,14 +247,16 @@ async function main() {
     // Verify system_introspect
     const introspect = responses.find((r) => r.id === 3);
     assert(introspect?.result != null, "system_introspect returned result", "No result");
+    assert(!("diagnostics" in (introspect?.result || {})), "diagnostics are absent unless requested", `Got: ${JSON.stringify(introspect?.result?.diagnostics)}`);
 
     // Parse the introspect text content to check version
     const content = introspect?.result?.content?.[0]?.text;
     if (content) {
       try {
         const data = JSON.parse(content);
-        assert(data.version != null && data.version !== "0.1.0", "introspect version is not stale", `Got: ${data.version}`);
-        assert(data.version === init?.result?.serverInfo?.version, "introspect version matches serverInfo", `introspect: ${data.version}, serverInfo: ${init?.result?.serverInfo?.version}`);
+        const introVersion = data.version ?? data.v;
+        assert(introVersion != null && introVersion !== "0.1.0", "introspect version is not stale", `Got: ${introVersion}`);
+        assert(introVersion === init?.result?.serverInfo?.version, "introspect version matches serverInfo", `introspect: ${introVersion}, serverInfo: ${init?.result?.serverInfo?.version}`);
       } catch {
         // Human-readable format - extract version with emoji prefix
         const match = content.match(/📦\s*Version:\s*(\d+\.\d+\.\d+\S*)/i);

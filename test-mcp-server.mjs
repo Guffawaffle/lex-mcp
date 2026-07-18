@@ -122,6 +122,7 @@ const PROTOCOL_SEQUENCE = [
     validate: (resp) => {
       if (resp.error) return `Tool error: ${resp.error.message}`;
       if (!resp.result) return "No result";
+      if ("diagnostics" in resp.result) return "Diagnostics appeared without an explicit request";
       return null;
     },
   },
@@ -159,6 +160,7 @@ const PROTOCOL_SEQUENCE = [
         arguments: {
           reference_point: "test harness",
           limit: 1,
+          format: "compact",
         },
       },
     },
@@ -190,10 +192,13 @@ function log(icon, label, msg) {
 }
 
 async function runTests() {
+  const cleanEnvironment = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("LEX_")),
+  );
   const proc = spawn(cmd, cmdArgs, {
     cwd: workDir,
     env: {
-      ...process.env,
+      ...cleanEnvironment,
       LEX_WORKSPACE_ROOT: workDir,
       LEX_DEBUG: verbose ? "1" : "",
     },

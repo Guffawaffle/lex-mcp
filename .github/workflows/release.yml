@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g., 2.2.0)"
+        description: "Signed release tag or version (e.g., v3.0.0 or 3.0.0)"
         required: true
         type: string
 
@@ -19,14 +19,32 @@ jobs:
   validate-tag:
     name: Validate Release Tag
     runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.release.outputs.tag }}
+      release_version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Verify signed release tag
-        if: github.event_name == 'push'
+      - name: Resolve release identity
+        id: release
         env:
+          RAW_RELEASE: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+        run: |
+          if [[ ! "$RAW_RELEASE" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "❌ Invalid release version: $RAW_RELEASE"
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          tag="v${version}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "✅ Resolved release $tag"
+
+      - name: Verify signed release tag
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
           TRUSTED_GPG_KEYS: ${{ secrets.TRUSTED_GPG_KEYS }}
         run: |
           if [ -z "$TRUSTED_GPG_KEYS" ]; then
@@ -34,21 +52,37 @@ jobs:
             exit 1
           fi
           echo "$TRUSTED_GPG_KEYS" | base64 -d | gpg --import
-          if ! git rev-parse --verify "${{ github.ref_name }}^{tag}" >/dev/null 2>&1; then
-            echo "❌ ${{ github.ref_name }} must be an annotated tag"
+          if ! git rev-parse --verify "${RELEASE_TAG}^{tag}" >/dev/null 2>&1; then
+            echo "❌ $RELEASE_TAG must exist and be an annotated tag"
             exit 1
           fi
-          git verify-tag "${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "push" ] && \
+             [ "$(git rev-parse "${RELEASE_TAG}^{commit}")" != "$GITHUB_SHA" ]; then
+            echo "❌ Pushed ref does not resolve to $RELEASE_TAG"
+            exit 1
+          fi
+          git verify-tag "$RELEASE_TAG"
           echo "✅ Tag signature verified"
 
-      - name: Validate semver tag
-        if: github.event_name == 'push'
+      - name: Verify release package alignment
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
-          if [[ ! "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "❌ Invalid semver tag: ${{ github.ref_name }}"
-            exit 1
-          fi
-          echo "✅ Valid semver tag: ${{ github.ref_name }}"
+          git checkout --detach "$RELEASE_TAG"
+          node - "$RELEASE_VERSION" <<'NODE'
+          const expected = process.argv[2];
+          const pkg = require('./package.json');
+          if (pkg.version !== expected) {
+            throw new Error(`Package version ${pkg.version} does not match release ${expected}`);
+          }
+          if (pkg.dependencies?.['@smartergpt/lex'] !== expected) {
+            throw new Error(
+              `Lex dependency ${pkg.dependencies?.['@smartergpt/lex']} does not match release ${expected}`,
+            );
+          }
+          NODE
+          echo "✅ Package and Lex dependency align at $RELEASE_VERSION"
 
   verify-package:
     name: Verify Package
@@ -56,6 +90,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-tag.outputs.release_tag }}
 
       - uses: actions/setup-node@v4
         with:
@@ -66,7 +102,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: Guffawaffle/lex
-          ref: ${{ github.ref_name }}
+          ref: ${{ needs.validate-tag.outputs.release_tag }}
           path: lex-core
 
       - name: Verify post-publish Lex lock integrity
@@ -144,23 +180,26 @@ jobs:
 
   create-github-release:
     name: Create GitHub Release
-    needs: verify-package
+    needs: [validate-tag, verify-package]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.validate-tag.outputs.release_tag }}
 
       - name: Generate changelog
         id: changelog
+        env:
+          RELEASE_TAG: ${{ needs.validate-tag.outputs.release_tag }}
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --abbrev=0 "${RELEASE_TAG}^" 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
-            echo "Generating changelog from $PREV_TAG to ${{ github.ref_name }}"
-            git log "${PREV_TAG}..${{ github.ref_name }}" --pretty=format:"- %s (%h)" > CHANGELOG.txt
+            echo "Generating changelog from $PREV_TAG to $RELEASE_TAG"
+            git log "${PREV_TAG}..${RELEASE_TAG}" --pretty=format:"- %s (%h)" > CHANGELOG.txt
           else
             echo "First release - listing all commits"
-            git log --pretty=format:"- %s (%h)" > CHANGELOG.txt
+            git log "$RELEASE_TAG" --pretty=format:"- %s (%h)" > CHANGELOG.txt
           fi
 
       - name: Download tarball
@@ -172,8 +211,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ needs.validate-tag.outputs.release_tag }}
+          name: Release ${{ needs.validate-tag.outputs.release_tag }}
           body_path: CHANGELOG.txt
           files: smartergpt-lex-mcp-*.tgz
           draft: false

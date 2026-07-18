@@ -51,6 +51,9 @@ const transport = startLexMcpStdio({
           error.code = "TEST_FAILURE";
           throw error;
         }
+        if (request.method === "notifications/fail") {
+          throw new Error("deliberate notification failure");
+        }
         if (request.method === "returned-error") {
           return {
             error: {
@@ -81,6 +84,7 @@ const inputEnded = once(input, "end");
 input.write(
   [
     JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+    JSON.stringify({ jsonrpc: "2.0", method: "notifications/fail" }),
     JSON.stringify({ jsonrpc: "2.0", id: null, method: "tools/call" }),
     JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call" }),
     JSON.stringify({ jsonrpc: "2.0", id: 0, method: "fail" }),
@@ -105,8 +109,20 @@ const responses = stdout
 
 assert.deepEqual(
   handled.map(({ id }) => id),
-  [1, 0, 4, 2],
-  "only absent ids are notifications and requests preserve wire order",
+  [undefined, undefined, 1, 0, 4, 2],
+  "notifications are dispatched without ids and all messages preserve wire order",
+);
+assert.deepEqual(
+  handled.map(({ method }) => method),
+  [
+    "notifications/initialized",
+    "notifications/fail",
+    "tools/call",
+    "fail",
+    "returned-error",
+    "trailing",
+  ],
+  "initialized and failing notifications both reach the server",
 );
 assert.deepEqual(responses[0], {
   jsonrpc: "2.0",
@@ -147,7 +163,16 @@ for (const response of responses.filter(({ error }) => error)) {
   );
 }
 assert.match(stderr, /Notification: notifications\/initialized/);
+assert.match(
+  stderr,
+  /Notification failed \(notifications\/fail\): deliberate notification failure/,
+);
 assert.doesNotMatch(stdout, /tenantId|workspaceId|authorizedScope|diagnostics/);
+assert.equal(
+  responses.length,
+  6,
+  "dispatched notifications never produce JSON-RPC responses",
+);
 
 await transport.idle();
 assert.equal(closed, 1, "EOF drains and closes the server");

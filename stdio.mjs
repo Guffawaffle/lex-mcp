@@ -147,6 +147,16 @@ export function startLexMcpStdio({
       if (debug) {
         errorOutput.write(`[LEX-MCP] Notification: ${request.method}\n`);
       }
+      try {
+        // Notifications participate in the same serialized dispatch stream as
+        // requests, but JSON-RPC forbids returning either a result or an error
+        // response for them.
+        await mcpServer.handleRequest(request);
+      } catch (error) {
+        errorOutput.write(
+          `[LEX-MCP] Notification failed (${request.method}): ${errorMessage(error)}\n`,
+        );
+      }
       return;
     }
 

@@ -20,7 +20,9 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: Guffawaffle/lex
-          ref: main
+          # PR #6 is reviewed alongside the Lex 3 umbrella. Its pull ref
+          # advances with blocking fixes; main and future PRs use merged Lex.
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 6 && 'refs/pull/768/head' || 'main' }}
           path: lex-core
 
       - uses: actions/setup-node@v6

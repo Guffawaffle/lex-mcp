@@ -1,16 +1,32 @@
 {
   "name": "@smartergpt/lex-mcp",
-  "version": "2.10.0",
+  "version": "3.0.0",
   "description": "MCP server for Lex episodic memory - stdio transport wrapper",
   "mcpName": "dev.smartergpt/lex",
   "type": "module",
+  "main": "./stdio.mjs",
+  "types": "./stdio.d.ts",
+  "exports": {
+    ".": {
+      "types": "./stdio.d.ts",
+      "import": "./stdio.mjs"
+    },
+    "./stdio": {
+      "types": "./stdio.d.ts",
+      "import": "./stdio.mjs"
+    }
+  },
   "bin": "./index.mjs",
   "files": [
     "index.mjs",
+    "stdio.mjs",
+    "stdio.d.ts",
     "README.md"
   ],
   "scripts": {
-    "test": "node test-contract.mjs && node test-mcp-server.mjs --local --clean",
+    "test": "npm run test:types && node test-stdio.mjs && node test-contract.mjs && node test-mcp-server.mjs --local --clean",
+    "test:types": "tsc --noEmit --skipLibCheck --module NodeNext --moduleResolution NodeNext --target ES2022 stdio.d.ts test-types.mts",
+    "test:stdio": "node test-stdio.mjs",
     "test:contract": "node test-contract.mjs",
     "test:contract:verbose": "node test-contract.mjs --verbose",
     "test:mcp": "node test-mcp-server.mjs --local --clean",
@@ -22,7 +38,7 @@
     "link:local": "rm -rf node_modules/@smartergpt/lex && mkdir -p node_modules/@smartergpt && ln -s /srv/lex-mcp/lex node_modules/@smartergpt/lex"
   },
   "dependencies": {
-    "@smartergpt/lex": "2.10.0"
+    "@smartergpt/lex": "3.0.0"
   },
   "publishConfig": {
     "access": "public",

@@ -69,6 +69,24 @@ jobs:
           ref: ${{ github.ref_name }}
           path: lex-core
 
+      - name: Verify post-publish Lex lock integrity
+        run: |
+          node <<'NODE'
+          const pkg = require('./package.json');
+          const lock = require('./package-lock.json');
+          const version = pkg.dependencies['@smartergpt/lex'];
+          const entry = lock.packages?.['node_modules/@smartergpt/lex'];
+          const expected = `https://registry.npmjs.org/@smartergpt/lex/-/lex-${version}.tgz`;
+          if (entry?.version !== version || entry?.resolved !== expected) {
+            throw new Error('Lex lock entry does not match the exact public release');
+          }
+          if (typeof entry.integrity !== 'string' || !entry.integrity.startsWith('sha512-')) {
+            throw new Error(
+              'Lex lock integrity is missing. After publishing Lex, run npm install --package-lock-only --ignore-scripts, commit package-lock.json, then tag lex-mcp.',
+            );
+          }
+          NODE
+
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
@@ -139,7 +157,7 @@ jobs:
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
             echo "Generating changelog from $PREV_TAG to ${{ github.ref_name }}"
-            git log $PREV_TAG..${{ github.ref_name }} --pretty=format:"- %s (%h)" > CHANGELOG.txt
+            git log "${PREV_TAG}..${{ github.ref_name }}" --pretty=format:"- %s (%h)" > CHANGELOG.txt
           else
             echo "First release - listing all commits"
             git log --pretty=format:"- %s (%h)" > CHANGELOG.txt

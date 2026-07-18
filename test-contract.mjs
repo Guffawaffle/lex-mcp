@@ -23,6 +23,7 @@ import { tmpdir } from "os";
 const verbose = process.argv.includes("--verbose");
 const INDEX_PATH = join(import.meta.dirname, "index.mjs");
 const PACKAGE_PATH = join(import.meta.dirname, "package.json");
+const LOCK_PATH = join(import.meta.dirname, "package-lock.json");
 const CORE_PACKAGE_PATH = join(import.meta.dirname, "node_modules", "@smartergpt", "lex", "package.json");
 const EXPECTED_MCP_NAME = "dev.smartergpt/lex";
 
@@ -49,8 +50,10 @@ function testPackageMetadata() {
   console.log("\n📋 Test: wrapper package metadata is a coordinated release contract");
 
   const wrapper = readPackage(PACKAGE_PATH);
+  const lock = readPackage(LOCK_PATH);
   const core = readPackage(CORE_PACKAGE_PATH);
   const coreRequirement = wrapper.dependencies?.["@smartergpt/lex"];
+  const lockedCore = lock.packages?.["node_modules/@smartergpt/lex"];
 
   assert(wrapper.name === "@smartergpt/lex-mcp", "wrapper package name is canonical", `Got: ${wrapper.name}`);
   assert(wrapper.mcpName === EXPECTED_MCP_NAME, "wrapper mcpName matches the registry namespace", `Got: ${wrapper.mcpName}`);
@@ -58,6 +61,18 @@ function testPackageMetadata() {
   assert(coreRequirement === wrapper.version, "core dependency is pinned exactly to the wrapper release", `dependency: ${coreRequirement}, wrapper: ${wrapper.version}`);
   assert(wrapper.engines?.node === core.engines?.node, "wrapper Node engine matches Lex core", `wrapper: ${wrapper.engines?.node}, core: ${core.engines?.node}`);
   assert(core.version === wrapper.version, "installed Lex core matches the wrapper release", `core: ${core.version}, wrapper: ${wrapper.version}`);
+  assert(wrapper.main === "./stdio.mjs", "package root is the public stdio host", `Got: ${wrapper.main}`);
+  assert(wrapper.types === "./stdio.d.ts", "package root publishes TypeScript declarations", `Got: ${wrapper.types}`);
+  assert(wrapper.exports?.["."]?.import === "./stdio.mjs", "package exports the stdio host", `Got: ${JSON.stringify(wrapper.exports?.["."])}`);
+  assert(wrapper.exports?.["."]?.types === "./stdio.d.ts", "package export includes TypeScript declarations", `Got: ${JSON.stringify(wrapper.exports?.["."])}`);
+  assert(wrapper.exports?.["./stdio"]?.import === "./stdio.mjs", "package exposes an explicit stdio subpath", `Got: ${JSON.stringify(wrapper.exports?.["./stdio"])}`);
+  assert(wrapper.files?.includes("stdio.mjs"), "published files include the stdio host", `Got: ${JSON.stringify(wrapper.files)}`);
+  assert(wrapper.files?.includes("stdio.d.ts"), "published files include stdio declarations", `Got: ${JSON.stringify(wrapper.files)}`);
+  assert(lock.version === wrapper.version, "lockfile version matches the wrapper release", `lock: ${lock.version}, wrapper: ${wrapper.version}`);
+  assert(lock.packages?.[""]?.dependencies?.["@smartergpt/lex"] === coreRequirement, "lockfile root keeps the exact Lex pin", `Got: ${lock.packages?.[""]?.dependencies?.["@smartergpt/lex"]}`);
+  assert(lockedCore?.version === wrapper.version, "lockfile resolves the matching Lex release", `Got: ${lockedCore?.version}`);
+  assert(lockedCore?.resolved === `https://registry.npmjs.org/@smartergpt/lex/-/lex-${wrapper.version}.tgz`, "lockfile targets the public Lex artifact", `Got: ${lockedCore?.resolved}`);
+  assert(!JSON.stringify(lock).includes("file:"), "release lockfile contains no local file dependencies", "Found a file: dependency");
 }
 
 /**
@@ -66,9 +81,12 @@ function testPackageMetadata() {
  */
 async function sendRequest(env, messages) {
   const workDir = env._workDir || env.LEX_WORKSPACE_ROOT || process.cwd();
+  const cleanEnvironment = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("LEX_"))
+  );
   const proc = spawn(process.execPath, [INDEX_PATH], {
     cwd: workDir,
-    env: { ...process.env, ...env, LEX_DEBUG: verbose ? "1" : "" },
+    env: { ...cleanEnvironment, ...env, LEX_DEBUG: verbose ? "1" : "" },
     stdio: ["pipe", "pipe", "pipe"],
   });
 

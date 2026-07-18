@@ -28,12 +28,41 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
-
       - name: Install Lex build dependencies
         working-directory: lex-core
         run: npm ci --ignore-scripts
+
+      # Changesets intentionally leave Lex's manifest at the last release until
+      # the release cut. Apply the wrapper's staged version only in this
+      # disposable checkout so build, local install, and pack test one coherent
+      # release artifact without committing a manifest or file: dependency.
+      - name: Apply staged Lex release version
+        working-directory: lex-core
+        run: |
+          expected_version="$(node -p "require('../package.json').version")"
+          npm version "$expected_version" \
+            --no-git-tag-version \
+            --ignore-scripts \
+            --allow-same-version
+          node -e "const expected=require('../package.json').version; const actual=require('./package.json').version; if (actual !== expected) throw new Error('Lex version ' + actual + ' does not match wrapper ' + expected);"
+
+      - name: Build matching Lex source
+        working-directory: lex-core
+        run: npm run build
+
+      - name: Pack staged Lex release
+        working-directory: lex-core
+        run: |
+          pack_dir="${RUNNER_TEMP}/lex-mcp-core"
+          mkdir -p "$pack_dir"
+          tarball="$(npm pack --pack-destination "$pack_dir" | tail -n 1)"
+          echo "LEX_MCP_LEX_TARBALL=${pack_dir}/${tarball}" >> "$GITHUB_ENV"
+
+      # Lex MCP release branches intentionally align before the matching Lex
+      # package is public. Install the staged tarball without persisting a file:
+      # dependency; the release workflow still proves the registry pin.
+      - name: Install dependencies with matching local Lex
+        run: npm install --ignore-scripts --no-save --package-lock=false "$LEX_MCP_LEX_TARBALL"
 
       - name: Build native dependencies
         run: npm rebuild better-sqlite3-multiple-ciphers
@@ -43,5 +72,3 @@ jobs:
 
       - name: Run packed-artifact smoke test
         run: npm run test:pack
-        env:
-          LEX_MCP_LEX_ROOT: ${{ github.workspace }}/lex-core

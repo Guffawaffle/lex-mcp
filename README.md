@@ -2,7 +2,8 @@
 
 Thin MCP stdio wrapper for [@smartergpt/lex](https://github.com/Guffawaffle/lex) episodic memory.
 
-Lex owns all capabilities. This package owns delivery over [Model Context Protocol](https://modelcontextprotocol.io/).
+Lex owns all capabilities and authority decisions. This package owns delivery
+over [Model Context Protocol](https://modelcontextprotocol.io/).
 
 ## Release Contract
 
@@ -12,11 +13,50 @@ exact version, reports that version through MCP `serverInfo`, and supports the
 same Node range as Lex (`>=20 <25`). Publish the matching Lex release before
 publishing this wrapper.
 
-## Quick Start
+Prepublication CI applies the staged wrapper version only to its disposable Lex
+checkout, then builds, installs, and packs that local source. After Lex is
+published, refresh this repository's registry lock with
+`npm install --package-lock-only --ignore-scripts`, verify no `file:` dependency
+was introduced, commit the resulting integrity, and only then tag or publish
+Lex MCP. The release workflow enforces that post-publish integrity gate.
+
+## Local Compatibility Launch
 
 ```bash
 npx @smartergpt/lex-mcp
 ```
+
+The executable is the backwards-compatible, local single-workspace launch. It
+uses the current directory or `LEX_WORKSPACE_ROOT` for project discovery and
+delegates local store configuration to Lex. Those values configure the local
+process; they do not establish canonical authority, grants, or a tenant scope.
+
+## Trusted Lex 3 Host
+
+Multi-tenant and cross-workspace hosts compose authority explicitly with Lex,
+then pass Lex's MCP options through this package unchanged:
+
+```js
+import { startLexMcpStdio } from "@smartergpt/lex-mcp";
+import { createPostgresTrustedRuntimeHost } from "@smartergpt/lex/runtime-scope";
+
+const host = createPostgresTrustedRuntimeHost({
+  authorityPool, // read-only runtime authority connection
+  selection, // authenticated tenant/workspace selection owned by this host
+  frameStoreBinder, // scope-bound PostgreSQL frame store binder
+  process: capturedProcessEvidence,
+  runtimeId,
+  traceId,
+  emitDiagnostics,
+});
+
+const transport = startLexMcpStdio({ serverOptions: host.mcp });
+```
+
+The host must supply its pools, authenticated selection, process evidence, and
+IDs. Neither Lex nor this wrapper reconstructs trusted authority from
+environment variables. See Lex's runtime-scope documentation for the complete
+host composition and PostgreSQL RLS contracts.
 
 ## Configuration
 
@@ -59,22 +99,37 @@ Add to `claude_desktop_config.json`:
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | npx @smartergpt/lex-mcp
 ```
 
-## Environment Variables
+## Compatibility-Launcher Environment Variables
 
-| Variable                | Description                                      | Default                     |
-| ----------------------- | ------------------------------------------------ | --------------------------- |
-| `LEX_WORKSPACE_ROOT`    | Project root directory (compat env var name)     | Current directory           |
-| `LEX_STORE`             | Frame backend (`sqlite` or `postgres`)           | `sqlite`                    |
-| `LEX_DATABASE_URL`      | PostgreSQL URL; required for PostgreSQL           | —                           |
-| `LEX_POSTGRES_PASSWORD` | Optional password for a credential-free URL       | —                           |
-| `LEX_POSTGRES_POOL_MAX` | Maximum PostgreSQL connection-pool size           | `10`                        |
+| Variable                | Description                                       | Default                     |
+| ----------------------- | ------------------------------------------------- | --------------------------- |
+| `LEX_WORKSPACE_ROOT`    | Local project root                                | Current directory           |
+| `LEX_STORE`             | Compatibility frame backend (`sqlite`/`postgres`) | `sqlite`                    |
+| `LEX_DATABASE_URL`      | Compatibility PostgreSQL connection URL           | —                           |
+| `LEX_POSTGRES_PASSWORD` | Password for a credential-free compatibility URL  | —                           |
+| `LEX_POSTGRES_POOL_MAX` | Compatibility PostgreSQL pool size                | `10`                        |
 | `LEX_DB_PATH`           | SQLite database path; ignored by PostgreSQL       | `.smartergpt/lex/memory.db` |
 | `LEX_MEMORY_DB`         | Alias for `LEX_DB_PATH` (compat only)             | —                           |
 | `LEX_DEBUG`             | Enable debug logging to stderr                    | Off                         |
 
 When both `LEX_DB_PATH` and `LEX_MEMORY_DB` are set, `LEX_DB_PATH` wins.
 
-For multi-root workspaces using SQLite, set the same absolute `LEX_DB_PATH` for direct Lex, this MCP wrapper, and AXF-routed Lex. For shared cross-host storage, set `LEX_STORE=postgres` and the same `LEX_DATABASE_URL` on every surface; keep credentials in the host environment or secret configuration. The wrapper delegates `.lex.config.json`, environment, and store resolution to Lex core, so installed launches honor caller-project config files. Use `system_introspect` to compare `path-v1` SQLite or credential-free `postgres-v1` identities across launch paths.
+For multi-root compatibility launches using SQLite, set the same absolute
+`LEX_DB_PATH` for direct Lex, this MCP wrapper, and AXF-routed Lex. The wrapper
+delegates `.lex.config.json`, environment, and local store resolution to Lex
+core, so installed launches honor caller-project config files. Shared trusted
+PostgreSQL deployments must instead inject canonical authority and a scoped
+store binder as shown above; environment configuration alone is never a trusted
+multi-tenant bootstrap.
+
+## Agent Output
+
+Agents can request `format: "compact"` on supported frame and introspection
+tools to avoid redundant presentation metadata. Runtime-scope diagnostics are
+absent by default and appear only when a caller explicitly requests
+`diagnostics: "summary"` or `"full"` and has the required authority. Output
+format and diagnostics affect presentation only; they never change scope or
+authorization outcomes.
 
 ## Tools
 

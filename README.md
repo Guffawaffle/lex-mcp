@@ -1,64 +1,97 @@
+<div align="center">
+
 # @smartergpt/lex-mcp
 
-Thin MCP stdio wrapper for [@smartergpt/lex](https://github.com/Guffawaffle/lex) episodic memory.
+## Give an MCP client a stdio doorway into Lex.
 
-Lex owns all capabilities and authority decisions. This package owns delivery
-over [Model Context Protocol](https://modelcontextprotocol.io/).
+[Lex](https://github.com/Guffawaffle/lex) remembers decisions, blockers, next steps, and repository
+boundaries across agent sessions. Lex-MCP does one narrower job: it delivers Lex's tools to an MCP
+client through a standalone newline-delimited JSON-RPC process.
 
-## Release Contract
+**Use it when your agent host needs an MCP command. Skip it when you already invoke or compose Lex
+directly.**
 
-`@smartergpt/lex-mcp` is a coordinated release of Lex core, not a floating
-compatibility layer. Each wrapper release pins `@smartergpt/lex` to the same
-exact version, reports that version through MCP `serverInfo`, and supports the
-same Node range as Lex (`>=20 <25`). Publish the matching Lex release before
-publishing this wrapper.
+</div>
 
-Prepublication CI applies the staged wrapper version only to its disposable Lex
-checkout, then builds, installs, and packs that local source. After Lex is
-published, refresh this repository's registry lock with
-`npm install --package-lock-only --ignore-scripts`, verify no `file:` dependency
-was introduced, commit the resulting integrity, and only then tag or publish
-Lex MCP. The release workflow enforces that post-publish integrity gate.
+[Do I need Lex-MCP?](#do-i-need-lex-mcp) · [Read-only smoke test](#smallest-reversible-smoke-test) · [Client setup](#connect-an-mcp-client) · [Trusted hosts](#trusted-lex-3-hosts) · [Release contract](#release-contract)
 
-## Local Compatibility Launch
+## Do I need Lex-MCP?
+
+Use Lex-MCP when all of these are true:
+
+- your agent host supports MCP over stdio;
+- it expects a standalone command such as `npx @smartergpt/lex-mcp`;
+- you want that client to call Lex's Frame, policy, Atlas, introspection, and maintenance tools.
+
+You probably do **not** need this package when:
+
+- the Lex CLI already gives your workflow the continuity it needs;
+- your application embeds `@smartergpt/lex/mcp-server` and already owns transport;
+- AXF or another trusted host already composes the relevant Lex capability;
+- you expect an MCP wrapper to provide authentication, tenant authority, orchestration, or cloud
+  storage. It does not.
+
+Lex owns the capabilities, storage contracts, policy behavior, and authorization decisions. The
+agent host owns what it authenticates and which workspace it selects. Lex-MCP owns only stdio
+delivery and process lifecycle.
+
+### Two launch modes
+
+| Mode | Use it for | What establishes scope |
+|---|---|---|
+| Local compatibility launcher | One operator-controlled workspace and an MCP client that needs a command | Current directory, `LEX_WORKSPACE_ROOT`, and Lex's local compatibility configuration |
+| Trusted Lex 3 host | A host that already authenticates principals and binds tenant/workspace-scoped authority | Explicit host inputs and Lex's trusted runtime-scope composition |
+
+The local launcher is convenient, but its environment values are configuration—not proof of
+identity, grants, or tenant authority. A multi-tenant deployment must use trusted-host composition;
+setting PostgreSQL environment variables on the compatibility launcher does not make it trusted.
+
+Not sure which path applies? Give an agent the bounded, read-only
+[fit evaluation](./docs/agent-evaluation.md). It returns one recommendation: `adopt`, `pilot`,
+`defer`, or `not a fit`.
+
+## Smallest reversible smoke test
+
+This POSIX-shell test launches version `3.0.1`, performs only the MCP handshake and `tools/list`,
+and confines the package cache and any Lex compatibility state to one temporary directory. It does
+not call a write tool or modify the repository.
+
+`npx` may contact the npm registry and execute package installation code. Run this only after that
+network and code-execution boundary is approved.
 
 ```bash
-npx @smartergpt/lex-mcp
+smoke_dir="$(mktemp -d)"
+
+(
+  cd "$smoke_dir"
+  printf '%s\n' \
+    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"lex-mcp-smoke","version":"1.0.0"}}}' \
+    '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+    '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+    | LEX_WORKSPACE_ROOT="$smoke_dir" \
+      LEX_DB_PATH="$smoke_dir/memory.db" \
+      npm_config_cache="$smoke_dir/npm-cache" \
+      npx --yes @smartergpt/lex-mcp@3.0.1
+)
+
+find "$smoke_dir" -maxdepth 4 -print
 ```
 
-The executable is the backwards-compatible, local single-workspace launch. It
-uses the current directory or `LEX_WORKSPACE_ROOT` for project discovery and
-delegates local store configuration to Lex. Those values configure the local
-process; they do not establish canonical authority, grants, or a tenant scope.
+A successful response identifies `lex-mcp` version `3.0.1` and returns Lex's tool list. Review the
+printed temporary path, then remove only that directory:
 
-## Trusted Lex 3 Host
-
-Multi-tenant and cross-workspace hosts compose authority explicitly with Lex,
-then pass Lex's MCP options through this package unchanged:
-
-```js
-import { startLexMcpStdio } from "@smartergpt/lex-mcp";
-import { createPostgresTrustedRuntimeHost } from "@smartergpt/lex/runtime-scope";
-
-const host = createPostgresTrustedRuntimeHost({
-  authorityPool, // read-only runtime authority connection
-  selection, // authenticated tenant/workspace selection owned by this host
-  frameStoreBinder, // scope-bound PostgreSQL frame store binder
-  process: capturedProcessEvidence,
-  runtimeId,
-  traceId,
-  emitDiagnostics,
-});
-
-const transport = startLexMcpStdio({ serverOptions: host.mcp });
+```bash
+test -n "$smoke_dir" && test -d "$smoke_dir" && rm -rf -- "$smoke_dir"
+unset smoke_dir
 ```
 
-The host must supply its pools, authenticated selection, process evidence, and
-IDs. Neither Lex nor this wrapper reconstructs trusted authority from
-environment variables. See Lex's runtime-scope documentation for the complete
-host composition and PostgreSQL RLS contracts.
+This is read-only at the MCP tool surface. Compatibility startup may initialize SQLite state, which
+is why the test redirects both the database and npm cache into the disposable directory.
 
-## Configuration
+## Connect an MCP client
+
+Lex-MCP supports Node.js 20 through 24 (`>=20 <25`). Pinning the wrapper version makes the launched
+artifact reproducible; that wrapper in turn pins the exact matching Lex release.
 
 ### VS Code / Copilot
 
@@ -68,8 +101,9 @@ Add to `.vscode/mcp.json`:
 {
   "servers": {
     "lex": {
+      "type": "stdio",
       "command": "npx",
-      "args": ["@smartergpt/lex-mcp"],
+      "args": ["--yes", "@smartergpt/lex-mcp@3.0.1"],
       "env": {
         "LEX_WORKSPACE_ROOT": "${workspaceFolder}"
       }
@@ -80,76 +114,158 @@ Add to `.vscode/mcp.json`:
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+Add to `claude_desktop_config.json`, using the absolute project path the server should treat as its
+local workspace:
 
 ```json
 {
   "mcpServers": {
     "lex": {
       "command": "npx",
-      "args": ["@smartergpt/lex-mcp"]
+      "args": ["--yes", "@smartergpt/lex-mcp@3.0.1"],
+      "env": {
+        "LEX_WORKSPACE_ROOT": "/absolute/path/to/project"
+      }
     }
   }
 }
 ```
 
-### Quick Smoke Test
+These examples use the local compatibility launcher. In controlled or offline environments,
+install the reviewed package through your normal dependency process and configure the client to use
+that installed executable instead of allowing `npx` to fetch it.
 
-```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | npx @smartergpt/lex-mcp
+To remove a pilot, delete the MCP client entry. Remove a package dependency only if the pilot added
+one. Do not delete an existing Lex database, configuration, or Frame history as part of wrapper
+cleanup.
+
+## What crosses the boundary
+
+| Concern | Owner |
+|---|---|
+| MCP line parsing, response serialization, ordered dispatch, EOF, and shutdown | Lex-MCP |
+| Tool registry, Frames, policy, Atlas, store contracts, validation, and authorization outcomes | Lex |
+| Authenticated principal, tenant/workspace selection, process evidence, pools, and runtime IDs | Trusted host |
+| MCP client configuration and the project data submitted to tools | Operator and agent host |
+
+Lex-MCP does not mint authority, infer a trusted tenant from environment variables, or broaden a
+caller's grants. Stored Frame bodies are historical project data; clients should not treat recalled
+text as executable instructions.
+
+## Local compatibility configuration
+
+The executable uses the current directory or `LEX_WORKSPACE_ROOT` as the project root and delegates
+store and policy resolution to Lex.
+
+| Variable | Description | Default |
+|---|---|---|
+| `LEX_WORKSPACE_ROOT` | Local project root | Current directory |
+| `LEX_STORE` | Compatibility Frame backend (`sqlite` or `postgres`) | `sqlite` |
+| `LEX_DATABASE_URL` | Compatibility PostgreSQL connection URL | — |
+| `LEX_POSTGRES_PASSWORD` | Password for a credential-free compatibility URL | — |
+| `LEX_POSTGRES_POOL_MAX` | Compatibility PostgreSQL pool size | `10` |
+| `LEX_DB_PATH` | SQLite database path; ignored by PostgreSQL | `.smartergpt/lex/memory.db` |
+| `LEX_MEMORY_DB` | Compatibility alias for `LEX_DB_PATH` | — |
+| `LEX_DEBUG` | Enable diagnostic logging to stderr | Off |
+
+When both SQLite path variables are set, `LEX_DB_PATH` wins. For a multi-root local setup, use the
+same absolute `LEX_DB_PATH` for direct Lex, Lex-MCP, and any routed Lex process. Keep database
+credentials in the host environment or a secret manager, not in checked-in MCP configuration.
+
+## Trusted Lex 3 hosts
+
+Use the public transport export when a trusted host needs Lex-MCP's ordered stdio delivery. The host
+must construct canonical authority and pass Lex's `host.mcp` options through unchanged:
+
+```js
+import { startLexMcpStdio } from "@smartergpt/lex-mcp";
+import { createPostgresTrustedRuntimeHost } from "@smartergpt/lex/runtime-scope";
+
+const host = createPostgresTrustedRuntimeHost({
+  authorityPool, // read-only runtime authority connection, never the admin pool
+  authoritySchema, // explicit PostgreSQL schema containing canonical authority
+  selection, // authenticated tenant/workspace selection owned by this host
+  frameStoreBinder, // scope-bound PostgreSQL FrameStore binder
+  process: capturedProcessEvidence,
+  runtimeId,
+  traceId,
+  emitDiagnostics,
+});
+
+const transport = startLexMcpStdio({ serverOptions: host.mcp });
 ```
 
-## Compatibility-Launcher Environment Variables
+The host supplies its pools, authority schema, authenticated selection, captured process evidence,
+and IDs. Lex resolves and enforces the resulting authorized scope. Neither Lex nor this wrapper
+reconstructs trusted authority from ambient environment variables. See Lex's
+[runtime-scope contract](https://github.com/Guffawaffle/lex/blob/main/docs/RUNTIME_SCOPE_CONTRACT.md)
+and [PostgreSQL scope security](https://github.com/Guffawaffle/lex/blob/main/docs/POSTGRES_SCOPE_SECURITY.md)
+for the complete host contract.
 
-| Variable                | Description                                       | Default                     |
-| ----------------------- | ------------------------------------------------- | --------------------------- |
-| `LEX_WORKSPACE_ROOT`    | Local project root                                | Current directory           |
-| `LEX_STORE`             | Compatibility frame backend (`sqlite`/`postgres`) | `sqlite`                    |
-| `LEX_DATABASE_URL`      | Compatibility PostgreSQL connection URL           | —                           |
-| `LEX_POSTGRES_PASSWORD` | Password for a credential-free compatibility URL  | —                           |
-| `LEX_POSTGRES_POOL_MAX` | Compatibility PostgreSQL pool size                | `10`                        |
-| `LEX_DB_PATH`           | SQLite database path; ignored by PostgreSQL       | `.smartergpt/lex/memory.db` |
-| `LEX_MEMORY_DB`         | Alias for `LEX_DB_PATH` (compat only)             | —                           |
-| `LEX_DEBUG`             | Enable debug logging to stderr                    | Off                         |
+## Agent and automation output
 
-When both `LEX_DB_PATH` and `LEX_MEMORY_DB` are set, `LEX_DB_PATH` wins.
+Agents can request `format: "compact"` on supported Frame and introspection tools to reduce
+presentation metadata. Runtime-scope diagnostics are absent by default. They appear only when a
+caller explicitly requests `diagnostics: "summary"` or `"full"` and has the required authority.
+Formatting and diagnostics never change scope or authorization outcomes.
 
-For multi-root compatibility launches using SQLite, set the same absolute
-`LEX_DB_PATH` for direct Lex, this MCP wrapper, and AXF-routed Lex. The wrapper
-delegates `.lex.config.json`, environment, and local store resolution to Lex
-core, so installed launches honor caller-project config files. Shared trusted
-PostgreSQL deployments must instead inject canonical authority and a scoped
-store binder as shown above; environment configuration alone is never a trusted
-multi-tenant bootstrap.
+## Tools delivered from Lex
 
-## Agent Output
+The current coordinated release exposes 14 tools:
 
-Agents can request `format: "compact"` on supported frame and introspection
-tools to avoid redundant presentation metadata. Runtime-scope diagnostics are
-absent by default and appear only when a caller explicitly requests
-`diagnostics: "summary"` or `"full"` and has the required authority. Output
-format and diagnostics affect presentation only; they never change scope or
-authorization outcomes.
+- `frame_create`, `frame_validate`, `frame_search`, `frame_get`, and `frame_list`;
+- `policy_check`, `timeline_show`, and `atlas_analyze`;
+- `system_introspect`, `help`, and `hints_get`;
+- `contradictions_scan`, `db_stats`, and `turncost_calculate`.
 
-## Tools
+Lex defines these tools and their behavior. Lex-MCP transports their requests and responses.
 
-This MCP server provides 14 tools for episodic memory management:
+## Release contract
 
-- `frame_create` - Store episodic memory snapshot
-- `frame_search` - Search frames by reference, branch, or ticket
-- `frame_get` - Retrieve specific frame by ID
-- `frame_list` - List recent frames with filtering
-- `frame_validate` - Validate frame input (dry-run)
-- `policy_check` - Validate code against policy rules
-- `timeline_show` - Visual timeline of frame evolution
-- `atlas_analyze` - Analyze code structure and dependencies
-- `system_introspect` - Discover Lex capabilities and state
-- `help` - Usage help and examples
-- `hints_get` - Retrieve error recovery hints
-- `contradictions_scan` - Detect conflicting information across frames
-- `db_stats` - Database statistics and activity metrics
-- `turncost_calculate` - Turn Cost governance metrics
+`@smartergpt/lex-mcp` is a coordinated Lex release, not a floating compatibility layer. Each
+wrapper release:
 
-## Learn More
+- pins `@smartergpt/lex` to the same exact version;
+- reports that version through MCP `serverInfo` and Lex introspection;
+- supports the exact same Node.js range as Lex.
 
-See the [Lex documentation](https://github.com/Guffawaffle/lex) for full details.
+For this release, the wrapper, dependency pin, installed Lex core, and server-reported version are
+all `3.0.1`; the Node range is `>=20 <25`.
+
+Publish the matching Lex release before publishing this wrapper. Prepublication CI applies the
+staged wrapper version only to its disposable Lex checkout, then builds, installs, and packs that
+local source. It must not persist a `file:` dependency.
+
+After Lex is public:
+
+1. run `npm install --package-lock-only --ignore-scripts` in this repository;
+2. verify the lock resolves the exact registry tarball and includes `sha512-` integrity;
+3. verify no `file:` dependency was introduced;
+4. commit the resulting lockfile before creating the signed release tag or publishing Lex-MCP.
+
+The release workflow verifies the signed tag, exact package/dependency versions, registry lock
+integrity, Node alignment, public exports, packed artifact, server version, and canonical tool list.
+Publishing remains manual because npm 2FA requires interactive authorization.
+
+## Develop and verify
+
+```bash
+npm ci --ignore-scripts
+npm rebuild better-sqlite3-multiple-ciphers
+npm test
+npm run test:pack
+```
+
+`npm test` covers the public TypeScript surface, stdio lifecycle and error behavior, exact release
+contract, local compatibility resolution, MCP handshake, introspection, and the 14-tool inventory.
+`npm run test:pack` installs locally packed Lex and Lex-MCP artifacts into a clean temporary project
+and repeats the public launch checks.
+
+## Learn more
+
+- [Agent fit evaluation](./docs/agent-evaluation.md)
+- [Lex](https://github.com/Guffawaffle/lex): durable agent work context, policy, Atlas, storage, and
+  trusted runtime scope
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+
+Lex-MCP is available under the MIT License.

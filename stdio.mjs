@@ -69,7 +69,7 @@ function isValidRequestId(id) {
 /**
  * Start a Lex MCP server on newline-delimited JSON stdio.
  *
- * Trusted Lex 3 hosts pass the unmodified `host.mcp` object returned by
+ * Trusted Lex 4 hosts pass the unmodified `host.mcp` object returned by
  * `createPostgresTrustedRuntimeHost`. The optional `serverFactory` is intended
  * for embedding and transport tests; it receives the same options object by
  * identity.
@@ -141,7 +141,7 @@ export function startLexMcpStdio({
     }
 
     // Only an absent id denotes a notification. JSON-RPC permits clients to
-    // send null, but Lex 3 treats it as invalid so request/response ownership
+    // send null, but Lex treats it as invalid so request/response ownership
     // remains unambiguous.
     if (!Object.hasOwn(request, "id")) {
       if (debug) {

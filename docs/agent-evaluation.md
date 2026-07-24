@@ -55,7 +55,7 @@ Choose one:
 - **Local compatibility launcher** — appropriate for one operator-controlled workspace. Current
   directory and `LEX_*` values configure local discovery and storage; they do not establish trusted
   identity or tenant grants.
-- **Trusted Lex 3 host transport** — appropriate only when an existing host authenticates the
+- **Trusted Lex 4 host transport** — appropriate only when an existing host authenticates the
   principal, selects tenant/workspace scope, supplies pools and process evidence, and passes Lex's
   composed `host.mcp` options to `startLexMcpStdio`.
 
@@ -66,7 +66,7 @@ variables on the compatibility launcher are not a substitute.
 
 Inspect, without installing:
 
-- whether the runtime can provide Node.js 20 through 24 (`>=20 <25`);
+- whether the runtime can provide Node.js 24 or newer (`>=24`);
 - whether the host can launch a newline-delimited JSON stdio child process;
 - whether npm registry access and package execution are acceptable, or an approved local install is
   required;

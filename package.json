@@ -1,6 +1,6 @@
 {
   "name": "@smartergpt/lex-mcp",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "description": "MCP server for Lex episodic memory - stdio transport wrapper",
   "mcpName": "dev.smartergpt/lex",
   "type": "module",
@@ -16,7 +16,9 @@
       "import": "./stdio.mjs"
     }
   },
-  "bin": "./index.mjs",
+  "bin": {
+    "lex-mcp": "index.mjs"
+  },
   "files": [
     "index.mjs",
     "stdio.mjs",
@@ -38,7 +40,7 @@
     "link:local": "rm -rf node_modules/@smartergpt/lex && mkdir -p node_modules/@smartergpt && ln -s /srv/lex-mcp/lex node_modules/@smartergpt/lex"
   },
   "dependencies": {
-    "@smartergpt/lex": "3.0.1"
+    "@smartergpt/lex": "4.0.0"
   },
   "publishConfig": {
     "access": "public",
@@ -46,7 +48,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Guffawaffle/lex-mcp.git"
+    "url": "git+https://github.com/Guffawaffle/lex-mcp.git"
   },
   "keywords": [
     "mcp",
@@ -58,7 +60,7 @@
   "author": "Guffawaffle",
   "license": "MIT",
   "engines": {
-    "node": ">=20 <25"
+    "node": ">=24"
   },
   "homepage": "https://github.com/Guffawaffle/lex#readme",
   "bugs": {

@@ -22,7 +22,7 @@ const projectRoot = process.env.LEX_WORKSPACE_ROOT || process.cwd();
 
 // This executable preserves the local, single-workspace compatibility launch.
 // Environment and cwd select local configuration; they never establish trusted
-// Lex 3 authority. Trusted hosts import startLexMcpStdio and inject host.mcp.
+// Lex authority. Trusted hosts import startLexMcpStdio and inject host.mcp.
 let transport;
 try {
   transport = startLexMcpStdio({

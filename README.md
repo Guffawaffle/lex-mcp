@@ -13,7 +13,7 @@ directly.**
 
 </div>
 
-[Do I need Lex-MCP?](#do-i-need-lex-mcp) · [Read-only smoke test](#smallest-reversible-smoke-test) · [Client setup](#connect-an-mcp-client) · [Trusted hosts](#trusted-lex-3-hosts) · [Release contract](#release-contract)
+[Do I need Lex-MCP?](#do-i-need-lex-mcp) · [Read-only smoke test](#smallest-reversible-smoke-test) · [Client setup](#connect-an-mcp-client) · [Trusted hosts](#trusted-lex-4-hosts) · [Release contract](#release-contract)
 
 ## Do I need Lex-MCP?
 
@@ -40,7 +40,7 @@ delivery and process lifecycle.
 | Mode | Use it for | What establishes scope |
 |---|---|---|
 | Local compatibility launcher | One operator-controlled workspace and an MCP client that needs a command | Current directory, `LEX_WORKSPACE_ROOT`, and Lex's local compatibility configuration |
-| Trusted Lex 3 host | A host that already authenticates principals and binds tenant/workspace-scoped authority | Explicit host inputs and Lex's trusted runtime-scope composition |
+| Trusted Lex 4 host | A host that already authenticates principals and binds tenant/workspace-scoped authority | Explicit host inputs and Lex's trusted runtime-scope composition |
 
 The local launcher is convenient, but its environment values are configuration—not proof of
 identity, grants, or tenant authority. A multi-tenant deployment must use trusted-host composition;
@@ -52,7 +52,7 @@ Not sure which path applies? Give an agent the bounded, read-only
 
 ## Smallest reversible smoke test
 
-This POSIX-shell test launches version `3.0.1`, performs only the MCP handshake and `tools/list`,
+This POSIX-shell test launches version `4.0.0`, performs only the MCP handshake and `tools/list`,
 and confines the package cache and any Lex compatibility state to one temporary directory. It does
 not call a write tool or modify the repository.
 
@@ -71,13 +71,13 @@ smoke_dir="$(mktemp -d)"
     | LEX_WORKSPACE_ROOT="$smoke_dir" \
       LEX_DB_PATH="$smoke_dir/memory.db" \
       npm_config_cache="$smoke_dir/npm-cache" \
-      npx --yes @smartergpt/lex-mcp@3.0.1
+      npx --yes @smartergpt/lex-mcp@4.0.0
 )
 
 find "$smoke_dir" -maxdepth 4 -print
 ```
 
-A successful response identifies `lex-mcp` version `3.0.1` and returns Lex's tool list. Review the
+A successful response identifies `lex-mcp` version `4.0.0` and returns Lex's tool list. Review the
 printed temporary path, then remove only that directory:
 
 ```bash
@@ -90,7 +90,7 @@ is why the test redirects both the database and npm cache into the disposable di
 
 ## Connect an MCP client
 
-Lex-MCP supports Node.js 20 through 24 (`>=20 <25`). Pinning the wrapper version makes the launched
+Lex-MCP requires Node.js 24 or newer (`>=24`). Pinning the wrapper version makes the launched
 artifact reproducible; that wrapper in turn pins the exact matching Lex release.
 
 ### VS Code / Copilot
@@ -103,7 +103,7 @@ Add to `.vscode/mcp.json`:
     "lex": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "@smartergpt/lex-mcp@3.0.1"],
+      "args": ["--yes", "@smartergpt/lex-mcp@4.0.0"],
       "env": {
         "LEX_WORKSPACE_ROOT": "${workspaceFolder}"
       }
@@ -122,7 +122,7 @@ local workspace:
   "mcpServers": {
     "lex": {
       "command": "npx",
-      "args": ["--yes", "@smartergpt/lex-mcp@3.0.1"],
+      "args": ["--yes", "@smartergpt/lex-mcp@4.0.0"],
       "env": {
         "LEX_WORKSPACE_ROOT": "/absolute/path/to/project"
       }
@@ -172,7 +172,7 @@ When both SQLite path variables are set, `LEX_DB_PATH` wins. For a multi-root lo
 same absolute `LEX_DB_PATH` for direct Lex, Lex-MCP, and any routed Lex process. Keep database
 credentials in the host environment or a secret manager, not in checked-in MCP configuration.
 
-## Trusted Lex 3 hosts
+## Trusted Lex 4 hosts
 
 Use the public transport export when a trusted host needs Lex-MCP's ordered stdio delivery. The host
 must construct canonical authority and pass Lex's `host.mcp` options through unchanged:
@@ -230,7 +230,7 @@ wrapper release:
 - supports the exact same Node.js range as Lex.
 
 For this release, the wrapper, dependency pin, installed Lex core, and server-reported version are
-all `3.0.1`; the Node range is `>=20 <25`.
+all `4.0.0`; the Node range is `>=24`.
 
 Publish the matching Lex release before publishing this wrapper. Prepublication CI applies the
 staged wrapper version only to its disposable Lex checkout, then builds, installs, and packs that

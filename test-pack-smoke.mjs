@@ -182,6 +182,7 @@ async function main() {
     const lexMcpPkg = join(installDir, "node_modules", "@smartergpt", "lex-mcp", "package.json");
 
     assert(existsSync(mcpIndex), "lex-mcp index.mjs installed", `${mcpIndex} not found`);
+    assert(existsSync(mcpBin), "lex-mcp executable installed", `${mcpBin} not found`);
     assert(existsSync(mcpStdio), "lex-mcp public stdio host installed", `${mcpStdio} not found`);
     assert(existsSync(mcpStdioTypes), "lex-mcp stdio declarations installed", `${mcpStdioTypes} not found`);
     assert(existsSync(lexPkg), "@smartergpt/lex installed as dependency", `${lexPkg} not found`);

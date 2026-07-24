@@ -68,6 +68,7 @@ function testPackageMetadata() {
   assert(wrapper.exports?.["./stdio"]?.import === "./stdio.mjs", "package exposes an explicit stdio subpath", `Got: ${JSON.stringify(wrapper.exports?.["./stdio"])}`);
   assert(wrapper.files?.includes("stdio.mjs"), "published files include the stdio host", `Got: ${JSON.stringify(wrapper.files)}`);
   assert(wrapper.files?.includes("stdio.d.ts"), "published files include stdio declarations", `Got: ${JSON.stringify(wrapper.files)}`);
+  assert(wrapper.bin?.["lex-mcp"] === "index.mjs", "package publishes the lex-mcp executable", `Got: ${JSON.stringify(wrapper.bin)}`);
   assert(lock.version === wrapper.version, "lockfile version matches the wrapper release", `lock: ${lock.version}, wrapper: ${wrapper.version}`);
   assert(lock.packages?.[""]?.dependencies?.["@smartergpt/lex"] === coreRequirement, "lockfile root keeps the exact Lex pin", `Got: ${lock.packages?.[""]?.dependencies?.["@smartergpt/lex"]}`);
   assert(lockedCore?.version === wrapper.version, "lockfile resolves the matching Lex release", `Got: ${lockedCore?.version}`);

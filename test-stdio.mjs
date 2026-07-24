@@ -207,5 +207,5 @@ assert.deepEqual(
 );
 
 console.log(
-  "✅ stdio transport preserves explicit Lex 3 scope and compact responses",
+  "✅ stdio transport preserves explicit Lex 4 scope and compact responses",
 );

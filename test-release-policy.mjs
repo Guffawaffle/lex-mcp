@@ -1,0 +1,40 @@
+#!/usr/bin/env node
+
+import { readFileSync } from "node:fs";
+
+const releaseWorkflow = readFileSync(new URL("./.github/workflows/release.yml", import.meta.url), "utf8");
+const ciWorkflow = readFileSync(new URL("./.github/workflows/ci.yml", import.meta.url), "utf8");
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+const lock = JSON.parse(readFileSync(new URL("./package-lock.json", import.meta.url), "utf8"));
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+  console.log(`✓ ${message}`);
+}
+
+assert(pkg.version === pkg.dependencies?.["@smartergpt/lex"], "wrapper and Lex dependency versions match");
+assert(lock.packages?.["node_modules/@smartergpt/lex"]?.version === pkg.version, "lockfile resolves matching Lex");
+assert(releaseWorkflow.includes("workflow_dispatch:"), "release supports reviewed build-only dispatches");
+assert(releaseWorkflow.includes("publish:"), "publication requires an explicit boolean input");
+assert(releaseWorkflow.includes("environment: npm-release"), "npm publication uses the main-restricted environment");
+assert(releaseWorkflow.includes("id-token: write"), "npm publication receives OIDC authority");
+assert(releaseWorkflow.includes('npm publish "$TARBALL" --access public --provenance'), "workflow publishes the retained tarball with provenance");
+assert(releaseWorkflow.includes('MAIN_NOW=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main"'), "publication rechecks the live main tip");
+assert(releaseWorkflow.includes('if [ -z "$OBSERVED" ]'), "publication is recovery-safe when the version is initially absent");
+assert(releaseWorkflow.includes('elif [ "$OBSERVED" = "$EXPECTED" ]'), "publication accepts only an already-published exact candidate");
+assert(releaseWorkflow.includes("git verify-tag"), "tag releases verify the annotated tag signature");
+assert(releaseWorkflow.includes("TRUSTED_RELEASE_FINGERPRINTS"), "tag authority is constrained to trusted fingerprints");
+assert(releaseWorkflow.includes("artifact_digest:"), "private-repository evidence exposes the immutable artifact digest");
+assert(releaseWorkflow.includes('actions/artifacts/$ARTIFACT_ID'), "release consumers bind the candidate to its artifact service record");
+assert(!releaseWorkflow.includes("actions/attest@"), "private-repository lane does not call unavailable GitHub artifact attestations");
+assert(releaseWorkflow.includes("verify-npm-provenance.mjs"), "public verification checks the complete npm provenance statement");
+assert(releaseWorkflow.includes("gh attestation verify"), "public verification checks the provenance certificate identity");
+assert(releaseWorkflow.includes("Re-verify immutable remote release identity"), "GitHub release creation rechecks remote tag and main identity");
+assert(!/^\s*NODE_AUTH_TOKEN:/m.test(releaseWorkflow), "workflow does not inject a long-lived npm token");
+
+const actionRefs = [...`${releaseWorkflow}\n${ciWorkflow}`.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)(?:\s*#.*)?$/gm)].map((match) => match[1]);
+assert(actionRefs.length > 0, "release and CI workflows declare actions");
+for (const ref of actionRefs) {
+  const separator = ref.lastIndexOf("@");
+  assert(separator > 0 && /^[0-9a-f]{40}$/.test(ref.slice(separator + 1)), `action is pinned by commit: ${ref}`);
+}

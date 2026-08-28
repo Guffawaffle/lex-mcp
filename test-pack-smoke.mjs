@@ -25,6 +25,7 @@ const keep = process.argv.includes("--keep");
 
 const LEX_ROOT = process.env.LEX_MCP_LEX_ROOT || join(import.meta.dirname, "..", "lex");
 const STAGED_LEX_TARBALL = process.env.LEX_MCP_LEX_TARBALL;
+const USE_PUBLIC_LEX = process.env.LEX_MCP_USE_PUBLIC_LEX === "1";
 const LEX_MCP_ROOT = import.meta.dirname;
 
 let passed = 0;
@@ -113,7 +114,10 @@ async function main() {
 
   let lexTarball, lexMcpTarball;
   try {
-    if (STAGED_LEX_TARBALL) {
+    if (USE_PUBLIC_LEX) {
+      lexTarball = null;
+      log("Using the wrapper's exact public Lex dependency");
+    } else if (STAGED_LEX_TARBALL) {
       lexTarball = resolve(STAGED_LEX_TARBALL);
       assert(existsSync(lexTarball), "staged lex tarball exists", `Expected: ${lexTarball}`);
       log(`staged lex tarball: ${lexTarball}`);
@@ -157,13 +161,15 @@ async function main() {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    log("Installing lex tarball...");
-    execSync(`npm install ${JSON.stringify(lexTarball)}`, {
-      cwd: installDir,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-      timeout: 180000,
-    });
+    if (lexTarball) {
+      log("Installing lex tarball...");
+      execSync(`npm install ${JSON.stringify(lexTarball)}`, {
+        cwd: installDir,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: 180000,
+      });
+    }
 
     log("Installing lex-mcp tarball...");
     execSync(`npm install ${JSON.stringify(lexMcpTarball)}`, {

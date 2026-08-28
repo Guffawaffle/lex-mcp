@@ -52,7 +52,7 @@ Not sure which path applies? Give an agent the bounded, read-only
 
 ## Smallest reversible smoke test
 
-This POSIX-shell test launches version `4.0.0`, performs only the MCP handshake and `tools/list`,
+This POSIX-shell test launches version `4.0.2`, performs only the MCP handshake and `tools/list`,
 and confines the package cache and any Lex compatibility state to one temporary directory. It does
 not call a write tool or modify the repository.
 
@@ -71,13 +71,13 @@ smoke_dir="$(mktemp -d)"
     | LEX_WORKSPACE_ROOT="$smoke_dir" \
       LEX_DB_PATH="$smoke_dir/memory.db" \
       npm_config_cache="$smoke_dir/npm-cache" \
-      npx --yes @smartergpt/lex-mcp@4.0.0
+      npx --yes @smartergpt/lex-mcp@4.0.2
 )
 
 find "$smoke_dir" -maxdepth 4 -print
 ```
 
-A successful response identifies `lex-mcp` version `4.0.0` and returns Lex's tool list. Review the
+A successful response identifies `lex-mcp` version `4.0.2` and returns Lex's tool list. Review the
 printed temporary path, then remove only that directory:
 
 ```bash
@@ -103,7 +103,7 @@ Add to `.vscode/mcp.json`:
     "lex": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "@smartergpt/lex-mcp@4.0.0"],
+      "args": ["--yes", "@smartergpt/lex-mcp@4.0.2"],
       "env": {
         "LEX_WORKSPACE_ROOT": "${workspaceFolder}"
       }
@@ -122,7 +122,7 @@ local workspace:
   "mcpServers": {
     "lex": {
       "command": "npx",
-      "args": ["--yes", "@smartergpt/lex-mcp@4.0.0"],
+      "args": ["--yes", "@smartergpt/lex-mcp@4.0.2"],
       "env": {
         "LEX_WORKSPACE_ROOT": "/absolute/path/to/project"
       }
@@ -230,11 +230,11 @@ wrapper release:
 - supports the exact same Node.js range as Lex.
 
 For this release, the wrapper, dependency pin, installed Lex core, and server-reported version are
-all `4.0.0`; the Node range is `>=24`.
+all `4.0.2`; the Node range is `>=24`.
 
-Publish the matching Lex release before publishing this wrapper. Prepublication CI applies the
-staged wrapper version only to its disposable Lex checkout, then builds, installs, and packs that
-local source. It must not persist a `file:` dependency.
+Publish the matching Lex release before publishing this wrapper. Candidate CI installs the exact
+public dependency graph from the committed lockfile, rebuilds native dependencies, runs the delivery
+gate, and packs one retained wrapper artifact. It must not use or persist a `file:` dependency.
 
 After Lex is public:
 
@@ -243,9 +243,16 @@ After Lex is public:
 3. verify no `file:` dependency was introduced;
 4. commit the resulting lockfile before creating the signed release tag or publishing Lex-MCP.
 
-The release workflow verifies the signed tag, exact package/dependency versions, registry lock
-integrity, Node alignment, public exports, packed artifact, server version, and canonical tool list.
-Publishing remains manual because npm 2FA requires interactive authorization.
+An explicit `workflow_dispatch` from the exact current `main` commit with `publish=true` builds and
+tests the retained candidate on Linux and Windows, rechecks live `main`, and publishes those exact
+bytes through npm Trusted Publishing with provenance. The `npm-release` environment restricts that
+OIDC authority to `main`; npm holds no long-lived automation token for this repository. The workflow
+then verifies public integrity and binds npm's signed provenance to this repository, workflow, ref,
+and source commit.
+
+After public verification, create and push the signed annotated release tag at that same commit. The
+tag lane re-verifies the immutable tag, public package, retained artifact, and live `main` identity
+before creating the GitHub release.
 
 ## Develop and verify
 

@@ -12,65 +12,42 @@ permissions:
 jobs:
   delivery-contract:
     name: Delivery Contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Check out matching Lex source
-        uses: actions/checkout@v6
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
         with:
-          repository: Guffawaffle/lex
-          # PR #6 is reviewed alongside the Lex 3 umbrella. Its pull ref
-          # advances with blocking fixes; main and future PRs use merged Lex.
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 6 && 'refs/pull/768/head' || 'main' }}
-          path: lex-core
+          egress-policy: audit
+          disable-sudo: true
 
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          node-version: "24"
-          cache: "npm"
+          persist-credentials: false
 
-      - name: Install Lex build dependencies
-        working-directory: lex-core
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v7
+        with:
+          node-version: "24.14.1"
+          cache: npm
+
+      - name: Pin candidate npm
+        run: npm install --global npm@11.12.1
+
+      - name: Install exact public dependency graph
         run: npm ci --ignore-scripts
-
-      # Changesets intentionally leave Lex's manifest at the last release until
-      # the release cut. Apply the wrapper's staged version only in this
-      # disposable checkout so build, local install, and pack test one coherent
-      # release artifact without committing a manifest or file: dependency.
-      - name: Apply staged Lex release version
-        working-directory: lex-core
-        run: |
-          expected_version="$(node -p "require('../package.json').version")"
-          npm version "$expected_version" \
-            --no-git-tag-version \
-            --ignore-scripts \
-            --allow-same-version
-          node -e "const expected=require('../package.json').version; const actual=require('./package.json').version; if (actual !== expected) throw new Error('Lex version ' + actual + ' does not match wrapper ' + expected);"
-
-      - name: Build matching Lex source
-        working-directory: lex-core
-        run: npm run build
-
-      - name: Pack staged Lex release
-        working-directory: lex-core
-        run: |
-          pack_dir="${RUNNER_TEMP}/lex-mcp-core"
-          mkdir -p "$pack_dir"
-          tarball="$(npm pack --pack-destination "$pack_dir" | tail -n 1)"
-          echo "LEX_MCP_LEX_TARBALL=${pack_dir}/${tarball}" >> "$GITHUB_ENV"
-
-      # Lex MCP release branches intentionally align before the matching Lex
-      # package is public. Install the staged tarball without persisting a file:
-      # dependency; the release workflow still proves the registry pin.
-      - name: Install dependencies with matching local Lex
-        run: npm install --ignore-scripts --no-save --package-lock=false "$LEX_MCP_LEX_TARBALL"
 
       - name: Build native dependencies
         run: npm rebuild better-sqlite3-multiple-ciphers
 
+      - name: Reject known high-severity dependency findings
+        run: npm audit --audit-level=high
+
       - name: Run delivery-contract tests
         run: npm test
 
-      - name: Run packed-artifact smoke test
+      - name: Run packed public-dependency smoke test
         run: npm run test:pack
+        env:
+          LEX_MCP_USE_PUBLIC_LEX: "1"
+
+      - name: Verify package contents
+        run: npm pack --ignore-scripts --dry-run

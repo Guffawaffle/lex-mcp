@@ -303,8 +303,8 @@ jobs:
           SOURCE_COMMIT: ${{ needs.validate-identity.outputs.source_commit }}
         run: |
           set -euo pipefail
-          TARBALL=$(find candidate -type f -name 'smartergpt-lex-mcp-*.tgz' -print -quit)
-          RECEIPT=$(find candidate -type f -name release-candidate.json -print -quit)
+          TARBALL=$(realpath "$(find candidate -type f -name 'smartergpt-lex-mcp-*.tgz' -print -quit)")
+          RECEIPT=$(realpath "$(find candidate -type f -name release-candidate.json -print -quit)")
           node scripts/create-release-candidate.mjs verify "$RECEIPT" "$TARBALL" "$SOURCE_COMMIT"
           MAIN_NOW=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
           [ "$MAIN_NOW" = "$SOURCE_COMMIT" ] || { echo "Current main changed after candidate validation"; exit 1; }

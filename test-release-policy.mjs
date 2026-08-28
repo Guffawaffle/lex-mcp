@@ -6,6 +6,9 @@ const releaseWorkflow = readFileSync(new URL("./.github/workflows/release.yml", 
 const ciWorkflow = readFileSync(new URL("./.github/workflows/ci.yml", import.meta.url), "utf8");
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const lock = JSON.parse(readFileSync(new URL("./package-lock.json", import.meta.url), "utf8"));
+const publishJobStart = releaseWorkflow.indexOf("\n  publish-npm:");
+const verifyPublicStart = releaseWorkflow.indexOf("\n  verify-public:");
+const publishJob = releaseWorkflow.slice(publishJobStart, verifyPublicStart);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -21,6 +24,9 @@ assert(releaseWorkflow.includes('Authorization: Bearer $GH_TOKEN'), "private-rep
 assert(releaseWorkflow.includes("environment: npm-release"), "npm publication uses the main-restricted environment");
 assert(releaseWorkflow.includes("id-token: write"), "npm publication receives OIDC authority");
 assert(releaseWorkflow.includes('npm publish "$TARBALL" --access public --provenance'), "workflow publishes the retained tarball with provenance");
+assert(publishJobStart > 0 && verifyPublicStart > publishJobStart, "release policy locates the npm publication job");
+assert(publishJob.includes('TARBALL=$(realpath "$(find candidate'), "npm publication canonicalizes the retained tarball path");
+assert(publishJob.includes('RECEIPT=$(realpath "$(find candidate'), "npm publication canonicalizes the retained receipt path");
 assert(releaseWorkflow.includes('MAIN_NOW=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main"'), "publication rechecks the live main tip");
 assert(releaseWorkflow.includes('if [ -z "$OBSERVED" ]'), "publication is recovery-safe when the version is initially absent");
 assert(releaseWorkflow.includes('elif [ "$OBSERVED" = "$EXPECTED" ]'), "publication accepts only an already-published exact candidate");

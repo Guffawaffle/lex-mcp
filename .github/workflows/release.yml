@@ -440,7 +440,13 @@ jobs:
   create-github-release:
     name: Create GitHub release
     needs: [validate-identity, build-candidate, verify-public]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      always() &&
+      needs.validate-identity.result == 'success' &&
+      needs.build-candidate.result == 'success' &&
+      needs.verify-public.result == 'success' &&
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
       actions: read

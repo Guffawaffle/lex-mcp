@@ -8,7 +8,9 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 const lock = JSON.parse(readFileSync(new URL("./package-lock.json", import.meta.url), "utf8"));
 const publishJobStart = releaseWorkflow.indexOf("\n  publish-npm:");
 const verifyPublicStart = releaseWorkflow.indexOf("\n  verify-public:");
+const createReleaseStart = releaseWorkflow.indexOf("\n  create-github-release:");
 const publishJob = releaseWorkflow.slice(publishJobStart, verifyPublicStart);
+const createReleaseJob = releaseWorkflow.slice(createReleaseStart);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -38,6 +40,11 @@ assert(!releaseWorkflow.includes("actions/attest@"), "private-repository lane do
 assert(releaseWorkflow.includes("verify-npm-provenance.mjs"), "public verification checks the complete npm provenance statement");
 assert(releaseWorkflow.includes("gh attestation verify"), "public verification checks the provenance certificate identity");
 assert(releaseWorkflow.includes("Re-verify immutable remote release identity"), "GitHub release creation rechecks remote tag and main identity");
+assert(createReleaseStart > verifyPublicStart, "release policy locates the GitHub release job");
+assert(createReleaseJob.includes("always() &&"), "tag release overrides skipped transitive publication state");
+for (const prerequisite of ["validate-identity", "build-candidate", "verify-public"]) {
+  assert(createReleaseJob.includes(`needs.${prerequisite}.result == 'success'`), `tag release requires successful ${prerequisite}`);
+}
 assert(!/^\s*NODE_AUTH_TOKEN:/m.test(releaseWorkflow), "workflow does not inject a long-lived npm token");
 
 const actionRefs = [...`${releaseWorkflow}\n${ciWorkflow}`.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)(?:\s*#.*)?$/gm)].map((match) => match[1]);

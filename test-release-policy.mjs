@@ -16,6 +16,8 @@ assert(pkg.version === pkg.dependencies?.["@smartergpt/lex"], "wrapper and Lex d
 assert(lock.packages?.["node_modules/@smartergpt/lex"]?.version === pkg.version, "lockfile resolves matching Lex");
 assert(releaseWorkflow.includes("workflow_dispatch:"), "release supports reviewed build-only dispatches");
 assert(releaseWorkflow.includes("publish:"), "publication requires an explicit boolean input");
+assert(!releaseWorkflow.includes("git fetch --no-tags origin main"), "private-repository identity does not depend on an unauthenticated fetch");
+assert(releaseWorkflow.includes('Authorization: Bearer $GH_TOKEN'), "private-repository identity uses authenticated read-only API authority");
 assert(releaseWorkflow.includes("environment: npm-release"), "npm publication uses the main-restricted environment");
 assert(releaseWorkflow.includes("id-token: write"), "npm publication receives OIDC authority");
 assert(releaseWorkflow.includes('npm publish "$TARBALL" --access public --provenance'), "workflow publishes the retained tarball with provenance");

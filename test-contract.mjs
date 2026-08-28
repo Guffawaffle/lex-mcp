@@ -73,6 +73,7 @@ function testPackageMetadata() {
   assert(lock.packages?.[""]?.dependencies?.["@smartergpt/lex"] === coreRequirement, "lockfile root keeps the exact Lex pin", `Got: ${lock.packages?.[""]?.dependencies?.["@smartergpt/lex"]}`);
   assert(lockedCore?.version === wrapper.version, "lockfile resolves the matching Lex release", `Got: ${lockedCore?.version}`);
   assert(lockedCore?.resolved === `https://registry.npmjs.org/@smartergpt/lex/-/lex-${wrapper.version}.tgz`, "lockfile targets the public Lex artifact", `Got: ${lockedCore?.resolved}`);
+  assert(lockedCore?.integrity?.startsWith("sha512-"), "lockfile binds the Lex artifact with SHA-512 integrity", `Got: ${lockedCore?.integrity}`);
   assert(!JSON.stringify(lock).includes("file:"), "release lockfile contains no local file dependencies", "Found a file: dependency");
 }
 

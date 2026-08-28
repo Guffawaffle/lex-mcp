@@ -16,6 +16,7 @@
  */
 
 import { execSync, spawn } from "child_process";
+import { createHash } from "crypto";
 import { mkdtempSync, existsSync, readdirSync, rmSync, readFileSync } from "fs";
 import { join, resolve } from "path";
 import { tmpdir } from "os";
@@ -134,6 +135,13 @@ async function main() {
       log(`lex tarball: ${lexTarball}`);
     }
 
+    if (lexTarball) {
+      const releaseLock = JSON.parse(readFileSync(join(LEX_MCP_ROOT, "package-lock.json"), "utf-8"));
+      const stagedIntegrity = `sha512-${createHash("sha512").update(readFileSync(lexTarball)).digest("base64")}`;
+      const lockedIntegrity = releaseLock.packages?.["node_modules/@smartergpt/lex"]?.integrity;
+      assert(lockedIntegrity === stagedIntegrity, "release lock integrity binds the packed Lex candidate", `lock: ${lockedIntegrity}, candidate: ${stagedIntegrity}`);
+    }
+
     // Pack lex-mcp
     log("Packing @smartergpt/lex-mcp...");
     const mcpPackOut = execSync("npm pack --pack-destination " + JSON.stringify(packDir), {
@@ -197,6 +205,7 @@ async function main() {
     // Verify the installed artifacts retain the coordinated release contract.
     const lexPkgJson = JSON.parse(readFileSync(lexPkg, "utf-8"));
     const lexMcpPkgJson = JSON.parse(readFileSync(lexMcpPkg, "utf-8"));
+    const installLock = JSON.parse(readFileSync(join(installDir, "package-lock.json"), "utf-8"));
     assert(lexPkgJson.exports?.["./mcp-server"] != null, "lex exports ./mcp-server subpath", `exports: ${JSON.stringify(Object.keys(lexPkgJson.exports || {}))}`);
     assert(lexMcpPkgJson.mcpName === "dev.smartergpt/lex", "packed wrapper mcpName matches the registry namespace", `Got: ${lexMcpPkgJson.mcpName}`);
     assert(lexMcpPkgJson.dependencies?.["@smartergpt/lex"] === lexMcpPkgJson.version, "packed wrapper pins the matching Lex release", `dependency: ${lexMcpPkgJson.dependencies?.["@smartergpt/lex"]}, wrapper: ${lexMcpPkgJson.version}`);
@@ -204,6 +213,10 @@ async function main() {
     assert(lexMcpPkgJson.exports?.["."]?.types === "./stdio.d.ts", "packed wrapper exports stdio declarations", `exports: ${JSON.stringify(lexMcpPkgJson.exports)}`);
     assert(lexPkgJson.version === lexMcpPkgJson.version, "packed Lex core matches wrapper version", `core: ${lexPkgJson.version}, wrapper: ${lexMcpPkgJson.version}`);
     assert(lexPkgJson.engines?.node === lexMcpPkgJson.engines?.node, "packed wrapper Node engine matches Lex core", `wrapper: ${lexMcpPkgJson.engines?.node}, core: ${lexPkgJson.engines?.node}`);
+    if (lexTarball) {
+      const installedLexSource = installLock.packages?.["node_modules/@smartergpt/lex"]?.resolved;
+      assert(installedLexSource?.startsWith("file:"), "clean install retains the packed Lex candidate", `resolved: ${installedLexSource}`);
+    }
   } catch (err) {
     console.error(`\n💥 Install failed: ${err.message}`);
     if (err.stderr) console.error(err.stderr.toString());

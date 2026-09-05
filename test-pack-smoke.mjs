@@ -17,7 +17,7 @@
 
 import { execSync, spawn } from "child_process";
 import { createHash } from "crypto";
-import { mkdtempSync, existsSync, readdirSync, rmSync, readFileSync } from "fs";
+import { mkdirSync, mkdtempSync, existsSync, readdirSync, rmSync, readFileSync } from "fs";
 import { join, resolve } from "path";
 import { tmpdir } from "os";
 
@@ -164,7 +164,9 @@ async function main() {
 
   const installDir = join(packDir, "install");
   try {
-    execSync(`mkdir -p ${JSON.stringify(installDir)} && cd ${JSON.stringify(installDir)} && npm init -y`, {
+    mkdirSync(installDir, { recursive: true });
+    execSync("npm init -y", {
+      cwd: installDir,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -230,7 +232,7 @@ async function main() {
 
   const entryPoint = join(installDir, "node_modules", "@smartergpt", "lex-mcp", "index.mjs");
   const workDir = join(packDir, "workspace");
-  execSync(`mkdir -p ${JSON.stringify(workDir)}`);
+  mkdirSync(workDir, { recursive: true });
 
   try {
     const proc = spawn(process.execPath, [entryPoint], {
@@ -296,6 +298,7 @@ async function main() {
     log(`DB path check: ${dbPath} exists=${existsSync(dbPath)}`);
 
   } catch (err) {
+    failed++;
     console.error(`\n💥 Server test failed: ${err.message}`);
     if (err.stack) log(err.stack);
   }
